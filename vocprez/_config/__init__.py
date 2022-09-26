@@ -35,7 +35,7 @@ SYSTEM_BASE_URI = SYSTEM_URI_BASE
 USE_SYSTEM_URIS = True
 USE_ABS_ALT_URI = True
 DEBUG = False
-SPARQL_ENDPOINT = "http://192.168.33.10:8080/rdf4j-server/repositories/ogc-na"
+SPARQL_ENDPOINT = "http://defs-dev.opengis.net:8080/rdf4j-server/repositories/profiles"
 SPARQL_USERNAME = ""
 SPARQL_PASSWORD = ""
 
@@ -54,7 +54,7 @@ DATA_SOURCES = {
 }
 
 # BEGIN Vocabs list info
-VOCS_URI = "http://localhost:5000/def"
+VOCS_URI = "http://www.opengis.net/def"
 VOCS_TITLE = "OGC Vocabularies"
 VOCS_DESC = "Definitions registered by OGC standardisation activities or hosted on behalf of related organisations."
 # END Vocabs list info
