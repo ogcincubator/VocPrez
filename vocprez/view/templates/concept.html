@@ -34,6 +34,7 @@
       <dd><a href="{{ utils.get_content_uri(vocab_uri) }}">{{ vocab_title }}</a></dd>
       {% endif %}
     </dl>
+    <div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ concept.prefLabel|e }}"></div>
   </div>
 
   <div style="grid-column: 1; grid-row: 3;">
@@ -158,4 +159,8 @@
     {% endif %}
   </table>
   </div>
+{% endblock %}
+
+{% block bottomjs %}
+  {% include "neighbors_graph.html" %}
 {% endblock %}

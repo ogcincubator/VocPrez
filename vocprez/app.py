@@ -763,6 +763,40 @@ def cache_reload():
     )
 # END ROUTE cache_reload
 
+@app.route("/neighbors")
+def neighbors():
+    res = request.args.get('res')
+    if not u.is_url(res):
+        return Response("Invalid URI for res", status=400)
+    res = f'<{res}>'
+    q = """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?resource ?outgoing (min(?type) as ?type)
+            (min(?typeLabel) as ?typeLabel)
+            (min(?label) as ?label)  (min(?prop) as ?prop)
+            (min(?propLabel) as ?propLabel) 
+        WHERE {
+          { 
+            { 
+              { SELECT ?prop WHERE { __S__ ?prop ?o } GROUP BY ?prop HAVING (count(distinct ?o) < 5) }
+              __S__ ?prop ?resource . BIND (true as ?outgoing)
+            }
+            UNION
+            { ?resource ?prop __S__ . BIND (false as ?outgoing) }
+          }
+          ?resource a ?type ;
+            rdfs:label|skos:prefLabel ?label .
+          FILTER(ISIRI(?resource))
+          OPTIONAL { ?prop rdfs:label ?propLabel } 
+          OPTIONAL { ?type rdfs:label ?typeLabel } 
+        }
+        GROUP BY ?resource ?outgoing
+    """
+    return {
+        'links': u.sparql_query(q.replace('__S__', res))
+    }
+
 
 # run the Flask app
 if __name__ == "__main__":
