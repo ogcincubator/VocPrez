@@ -783,7 +783,10 @@ def neighbors():
               __S__ ?prop ?resource . BIND (true as ?outgoing)
             }
             UNION
-            { ?resource ?prop __S__ . BIND (false as ?outgoing) }
+            {
+              { SELECT ?prop WHERE { ?s ?prop __S__ } GROUP BY ?prop HAVING (count(distinct ?s) < 5) }
+              ?resource ?prop __S__ . BIND (false as ?outgoing)
+            }
           }
           ?resource a ?type ;
             rdfs:label|skos:prefLabel ?label .
