@@ -34,7 +34,19 @@
       <dd><a href="{{ utils.get_content_uri(vocab_uri) }}">{{ vocab_title }}</a></dd>
       {% endif %}
     </dl>
-    <div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ concept.prefLabel|e }}"></div>
+    <div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ concept.prefLabel|e }}">
+      <div class="high-cardinality-modal hidden">
+        <div class="title-bar">
+          <div class="property">
+            <a href="#"></a>
+          </div>
+          <span class="close-modal">&times;</span>
+        </div>
+        <ul class="objects">
+        </ul>
+        <div class="pagination"></div>
+      </div>
+    </div>
   </div>
 
   <div style="grid-column: 1; grid-row: 3;">
@@ -90,7 +102,7 @@
           <th><span class="tooltip">{{ prop.label }}<span class="tooltiptext"><a href="{{ prop.uri }}">{{ prop.uri.split('#')[-1].split('/')[-1] }}</a></span></span></th>
           <td>
             {% if prop.value.startswith('http') %}
-              {% if prop.value_label is not none and prop.value_label != prop.value %}
+              {% if prop.value_label is not none %}
               <a href="{{ utils.get_content_uri(prop.value) }}">{{ prop.value_label }}</a>
               {% else %}
               <a href="{{ prop.value }}">{{ prop.value }}</a>

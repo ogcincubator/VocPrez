@@ -8,6 +8,17 @@ onload = () => {
     const incomingColor = 'red', outgoingColor = 'blue';
     const baseUrl = d3.select('body').attr('data-base-url');
     const height = 600;
+    const groupPadding = 20;
+    const padding = 10, margin = 10;
+
+    const profiles = [{
+        label: "",
+        filter: d => d.filter(item => Math.random() > 0.5),
+    }];
+
+    const toId = s => {
+        return `_${s.replace(/^[a-zA-Z0-9-_]/, '_')}`;
+    };
 
     const radian = (ux, uy, vx, vy) => {
         var dot = ux * vx + uy * vy;
@@ -147,13 +158,26 @@ onload = () => {
     d3.selectAll('.neighbors-graph').each(async function() {
         const wrapper = d3.select(this);
         const width = wrapper.node().offsetWidth;
+        var loadedData = null;
+
+        // Profile selector
+        wrapper.append('button')
+            .text('Click me')
+            .on('click', () => {
+                if (loadedData) {
+                    //update(loadedData.filter(d => Math.random() > 0.5));
+                    update({
+                        highCardinality: loadedData.highCardinality,
+                        links: loadedData.links.filter(d => Math.random() > 0.5),
+                    });
+                }
+            });
 
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
         const instance = cola.d3adaptor(d3)
             .avoidOverlaps(true)
             //.jaccardLinkLengths(150)
-            .linkDistance(d => 120 * linkCount[d.source || d.target])
             .size([width, height]);
 
         const svg = wrapper.append("svg")
@@ -184,128 +208,165 @@ onload = () => {
               .attr("fill", incomingColor)
               .attr("d", "M0,-5L10,0L0,5");
 
-        const [res, label, type] = [
+        const hcModal = svg.select('.high-cardinality-modal');
+        var hcStatus = {
+            items: [],
+            total: 0,
+            start: 0,
+        };
+
+        const [sourceRes, sourceLabel, sourceType] = [
             wrapper.attr('data-res'),
             wrapper.attr('data-label'),
             wrapper.attr('type'),
         ];
-        params = new URLSearchParams({ res });
-        const nodes = [{ res, label, type }];
-        const links = [];
-        const vocgroups = {};
-        const seen = { res: 0 };
-        const linkCount = {};
+        params = new URLSearchParams({ res: sourceRes });
 
-        const addItem = (item) => {
-            let idx = seen[item.resource.value];
-            if (!idx) {
-                idx = nodes.push({
-                    res: item.resource.value,
-                    label: item.label.value,
-                    type: item.type.value,
-                    typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
-                }) - 1;
-                seen[item.resource.value] = idx;
-                const voc = item.resource.value.replace(/^(.*[#/]).*/, '$1');
-                let voclist = vocgroups[voc];
-                if (!voclist) {
-                    vocgroups[voc] = [idx];
-                } else {
-                    voclist.push(idx);
+        const update = function(data) {
+            const nodes = [{ res: sourceRes, label: sourceLabel, type: sourceType }];
+            const links = [];
+            const vocgroups = {};
+            const seen = { sourceRes: 0 };
+            const linkCount = {};
+
+            const addItem = (item) => {
+                let idx = seen[item.resource.value];
+                if (!idx) {
+                    idx = nodes.push({
+                        res: item.resource.value,
+                        label: item.label.value,
+                        type: item.type.value,
+                        typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
+                    }) - 1;
+                    seen[item.resource.value] = idx;
+                    const voc = item.resource.value.replace(/^(.*[#/]).*/, '$1');
+                    let voclist = vocgroups[voc];
+                    if (!voclist) {
+                        vocgroups[voc] = [idx];
+                    } else {
+                        voclist.push(idx);
+                    }
                 }
-            }
-            return idx;
-        };
+                return idx;
+            };
 
-        const addLink = (item) => {
-            if (ignoredTypes.includes(item.type.value) || ignoredLinks.includes(item.prop.value)) {
-                return;
-            }
-            const idx = addItem(item), outgoing = item.outgoing.value !== 'false';
-            links.push({
-                source: outgoing ? 0 : idx,
-                target: outgoing ? idx : 0,
-                prop: item.prop.value,
-                label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
-                outgoing,
-            });
-            linkCount[idx] = (linkCount[idx] ?? 0) + 1
-        };
+            const addLink = (item, highCardinality) => {
+                if ((item.type && ignoredTypes.includes(item.type.value))
+                        || ignoredLinks.includes(item.prop.value)) {
+                    return;
+                }
+                const outgoing = item.outgoing.value !== 'false';
+                const idx = !highCardinality ? addItem(item) : nodes.push({
+                        highCardinality: true,
+                        prop: item.prop.value,
+                        count: item.count.value,
+                        id: `${item.prop.value} hc`,
+                    }) - 1;
+                links.push({
+                    source: outgoing ? 0 : idx,
+                    target: outgoing ? idx : 0,
+                    prop: item.prop.value,
+                    label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
+                    id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
+                    outgoing,
+                });
+                linkCount[idx] = (linkCount[idx] ?? 0) + 1
+            };
 
-        d3.json(`${baseUrl}/neighbors?${params}`, function (data) {
-
-            const groupPadding = 20;
-
-            data.links.map(i => addLink(i, true));
+            data.links.forEach(i => addLink(i, false));
+            data.highCardinality.forEach(i => addLink(i, true));
             const groups = Object.entries(vocgroups).map(([voc, leaves]) => ({ voc, leaves, padding: groupPadding }));
 
             instance
+                .linkDistance(d => 120 * (linkCount[d.source || d.target] || 1))
                 .nodes(nodes)
                 .links(links)
                 .groups(groups)
                 .start(10, 10, 10);
 
             var group = svg.selectAll(".group")
-                .data(groups)
-              .enter().append("rect")
+                .data(groups, d => d.voc);
+            group.exit().remove();
+            group = group.enter().append("rect")
                 .attr("rx", 8).attr("ry", 8)
                 .attr("class", "group")
-                .style("fill", function (d, i) { return color(i); });
-
-            const padding = 10, margin = 10;
+                .style("fill", function (d, i) { return color(i); })
+                .merge(group);
 
             var link = svg.selectAll(".link")
-                .data(links)
-              .enter().append("path")
+                .data(links, d => d.id);
+            link.exit().remove();
+            link = link.enter().append("path")
                 .attr("class", "link")
                 .attr("fill", "none")
                 .attr("stroke", d => d.outgoing ? outgoingColor : incomingColor)
                 .attr("stroke-width", "1.5px")
                 .attr("stroke-opacity", "1")
-                .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`);
+                .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`)
+                .merge(link);
 
             var linkLabelPath = svg.selectAll('.link-label-path')
-                .data(links)
-                .enter()
-                .append('path')
+                .data(links, d => d.id);
+            linkLabelPath.exit().remove();
+            linkLabelPath = linkLabelPath.enter().append('path')
                 .attr('class', 'link-label-path')
-                .attr('id', d => `link-label-path-${d.source.index}-${d.target.index}`)
                 .attr('fill', 'none')
-                //.attr('stroke', 'green')
-                .attr('stroke-width', '1px');
+                .attr('stroke-width', '1px')
+                .attr('id', d => `link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
+                .merge(linkLabelPath);
 
             var linkLabel = svg.selectAll('.link-label')
-                .data(links)
-                .enter()
-                .append("text")
+                .data(links, d => d.id);
+            linkLabel.exit().remove();
+            var linkLabelEnter = linkLabel.enter().append("text")
                 .attr('class', 'link-label')
                 .attr('text-anchor', 'middle')
-                .attr('font-size', '10px');
-            linkLabel.append('textPath')
-                .attr('xlink:href', d => `#link-label-path-${d.source.index}-${d.target.index}`)
+                .attr('font-size', '10px')
+            linkLabelEnter.append('textPath')
                 .attr('startOffset', '50%')
+                .attr('xlink:href', d => `#link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
                 .text(d => d.label);
+            linkLabel = linkLabelEnter.merge(linkLabel);
 
             var node = svg.selectAll(".node")
-                .data(nodes)
-              .enter().append("rect")
+                .data(nodes, d => d.res);
+            node.exit().remove();
+            var nodeEnter = node.enter().append("rect")
                 .attr("class", "node")
                 .attr("rx", 5).attr("ry", 5)
                 .attr("stroke", "white")
                 .attr("stroke-width", "1.5px")
-                .attr("cursor", "pointer")
-                .on('click', function(d) { window.location = d.res })
-                .style("fill", function (d) { return color(groups.length); });
+                .attr("cursor", d => d.highCardinality ? "help" : "pointer")
+                .on('click', function(d) {
+                    if (d.res) {
+                        window.location = d.res;
+                    }
+                })
+            nodeEnter.append("title")
+                .filter(d => d.label)
+                .text(function (d) { return d.label; });
+            node = nodeEnter.merge(node)
+                .style("fill", function (d) { return color(groups.length + (d.highCardinality ? 1 : 0)); });
 
             var label = svg.selectAll(".label")
-                .data(nodes)
-               .enter().append("text")
+                .data(nodes, d => d.res);
+                label.exit().remove();
+            var labelEnter = label.enter().append("text")
                 .attr("class", "label")
                 .attr("text-anchor", "middle")
-                .attr("cursor", "pointer")
+                .attr("cursor", d => d.highCardinality ? "help" : "pointer")
                 .attr("font-size", "12px")
-                .text(function (d) { return d.index && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label; })
-                .on('click', function(d) { window.location = d.res })
+                .attr('style', 'pointer-events: none')
+                .text(function (d) {
+                    if (d.highCardinality) {
+                        return `${d.count} resources`;
+                    }
+                    return d.index && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label;
+                })
+            labelEnter.append("title")
+                .filter(d => d.label)
+                .text(d => d.label);
+            label = labelEnter.merge(label)
                 .each(function(d) {
                     var bb = this.getBBox();
                     d.width = bb.width + padding + 2 * margin;
@@ -315,12 +376,6 @@ onload = () => {
                         d.height += 8 * margin;
                     }
                 });
-
-            label.append("title")
-                    .text(d => d.label);
-
-            node.append("title")
-                .text(function (d) { return d.label; });
 
             var popup = svg.append('g')
                 .attr('class', 'node-detail')
@@ -340,23 +395,9 @@ onload = () => {
                 .attr("cursor", "pointer")
                 .attr("font-size", "12px");
 
-            /*node.on('mouseover', (d, i) => {
-                    popup
-                        .attr('transform', `translate(${d.innerBounds.x},${d.innerBounds.y})`)
-                        .transition('popup')
-                            .duration(200)
-                            .style('opacity', 1.0);
-                    const popupLabel = popup.select('.popup-label')
-                        .text(d.label)
-                        .nodes()[0];
-                    const bb = popupLabel.getBBox();
-                    popup.select('.popup-node')
-                        .attr('width', bb.width)
-                        .attr('height', bb.height);
-                })
-                .on('mouseout', (d) => {
-                    popup.style('opacity', 0.0);
-                });*/
+            link.lower();
+            linkLabel.lower();
+            group.lower();
 
             instance.on("tick", function () {
                 node.each(function(d) { d.innerBounds = d.bounds.inflate(- (d.index ? margin : 4 * margin)) })
@@ -366,7 +407,7 @@ onload = () => {
                     .attr("height", function(d) { return d.innerBounds.height() });
 
                 link.attr("d", linkArc);
-                
+
                 linkLabelPath.attr("d", d => {
                     let { start, end, r, cx, cy } = d.arc;
                     let sweep = 0, offset = 5;
@@ -394,6 +435,11 @@ onload = () => {
                          return d.y + padding / 2;
                      });
             });
+        };
+
+        d3.json(`${baseUrl}/neighbors?${params}`, function (data) {
+            loadedData = data;
+            update(data);
         });
     });
 };

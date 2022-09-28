@@ -796,8 +796,32 @@ def neighbors():
         }
         GROUP BY ?resource ?outgoing
     """
+    hcq = """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?prop ?outgoing (min(?propLabel) as ?propLabel) (count(distinct ?resource) as ?count) 
+        WHERE {
+          {
+            { 
+              { SELECT ?prop WHERE { __S__ ?prop ?o } GROUP BY ?prop HAVING (count(distinct ?o) >= 5) }
+              __S__ ?prop ?resource . BIND (true as ?outgoing)
+            }
+            UNION
+            {
+              { SELECT ?prop WHERE { ?s ?prop __S__ } GROUP BY ?prop HAVING (count(distinct ?s) >= 5) }
+              ?resource ?prop __S__ . BIND (false as ?outgoing)
+            }
+          }
+          ?resource a ?type ;
+            rdfs:label|skos:prefLabel ?label .
+          FILTER(ISIRI(?resource))
+          OPTIONAL { ?prop rdfs:label ?propLabel } 
+        }
+        GROUP BY ?prop ?outgoing
+    """
     return {
-        'links': u.sparql_query(q.replace('__S__', res))
+        'links': u.sparql_query(q.replace('__S__', res)),
+        'highCardinality': u.sparql_query(hcq.replace('__S__', res)),
     }
 
 
