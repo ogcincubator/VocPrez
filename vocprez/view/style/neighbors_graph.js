@@ -164,20 +164,15 @@ onload = () => {
         wrapper.append('button')
             .text('Click me')
             .on('click', () => {
-                if (loadedData) {
-                    //update(loadedData.filter(d => Math.random() > 0.5));
-                    update({
-                        highCardinality: loadedData.highCardinality,
-                        links: loadedData.links.filter(d => Math.random() > 0.5),
-                    });
-                }
+                update({
+                    prop: p => Math.random() > 0.5,
+                });
             });
 
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
         const instance = cola.d3adaptor(d3)
             .avoidOverlaps(true)
-            //.jaccardLinkLengths(150)
             .size([width, height]);
 
         const svg = wrapper.append("svg")
@@ -215,6 +210,8 @@ onload = () => {
             start: 0,
         };
 
+        var nodes, links, groups;
+
         const [sourceRes, sourceLabel, sourceType] = [
             wrapper.attr('data-res'),
             wrapper.attr('data-label'),
@@ -222,79 +219,51 @@ onload = () => {
         ];
         params = new URLSearchParams({ res: sourceRes });
 
-        const update = function(data) {
-            const nodes = [{ res: sourceRes, label: sourceLabel, type: sourceType }];
-            const links = [];
-            const vocgroups = {};
-            const seen = { sourceRes: 0 };
+        const update = function(filters) {
+
+            var fNodes = nodes, fLinks = links, fGroups = groups;
+
+            if (filters) {
+                if (filters.res) {
+                    fNodes = fNodes.filter(n => n.res == sourceRes || filters.res(n.res));
+                    fLinks = fLinks.filter(l => filters.res(fNodes[l.source].res)
+                        || filters.res(fNodes[l.target].res));
+                }
+                if (filters.prop) {
+                    fLinks = fLinks.filter(l => filters.prop(l.prop));
+                    let filteredNodes = fLinks.map(l => l.source.res == sourceRes ? l.target.res : l.source.res);
+                    fNodes = fNodes.filter(n => n.res == sourceRes || filteredNodes.includes(n.res));
+                }
+                let fNodeIndexes = fNodes.map(n => n.index);
+                fGroups = fGroups.filter(g => g.leaves.some(i => fNodeIndexes.includes(i)));
+            }
+
             const linkCount = {};
+            fLinks.forEach(l => {
+                const n = l.source.res == sourceRes ? l.target.res : l.source.res;
+                linkCount[n] = (linkCount[n] || 0) + 1;
+            });
 
-            const addItem = (item) => {
-                let idx = seen[item.resource.value];
-                if (!idx) {
-                    idx = nodes.push({
-                        res: item.resource.value,
-                        label: item.label.value,
-                        type: item.type.value,
-                        typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
-                    }) - 1;
-                    seen[item.resource.value] = idx;
-                    const voc = item.resource.value.replace(/^(.*[#/]).*/, '$1');
-                    let voclist = vocgroups[voc];
-                    if (!voclist) {
-                        vocgroups[voc] = [idx];
-                    } else {
-                        voclist.push(idx);
-                    }
-                }
-                return idx;
-            };
-
-            const addLink = (item, highCardinality) => {
-                if ((item.type && ignoredTypes.includes(item.type.value))
-                        || ignoredLinks.includes(item.prop.value)) {
-                    return;
-                }
-                const outgoing = item.outgoing.value !== 'false';
-                const idx = !highCardinality ? addItem(item) : nodes.push({
-                        highCardinality: true,
-                        prop: item.prop.value,
-                        count: item.count.value,
-                        id: `${item.prop.value} hc`,
-                    }) - 1;
-                links.push({
-                    source: outgoing ? 0 : idx,
-                    target: outgoing ? idx : 0,
-                    prop: item.prop.value,
-                    label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
-                    id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
-                    outgoing,
-                });
-                linkCount[idx] = (linkCount[idx] ?? 0) + 1
-            };
-
-            data.links.forEach(i => addLink(i, false));
-            data.highCardinality.forEach(i => addLink(i, true));
-            const groups = Object.entries(vocgroups).map(([voc, leaves]) => ({ voc, leaves, padding: groupPadding }));
+            console.log(fNodes, fLinks, fGroups);
 
             instance
-                .linkDistance(d => 120 * (linkCount[d.source || d.target] || 1))
-                .nodes(nodes)
-                .links(links)
-                .groups(groups)
-                .start(10, 10, 10);
+                .linkDistance(d => 140 * (linkCount[d.source.res == sourceRes ? d.target.res : d.source.res] || 1))
+                .nodes(fNodes)
+                .links(fLinks)
+                .groups(fGroups)
+                .start();
 
             var group = svg.selectAll(".group")
-                .data(groups, d => d.voc);
+                .data(fGroups, d => d.voc);
             group.exit().remove();
             group = group.enter().append("rect")
                 .attr("rx", 8).attr("ry", 8)
                 .attr("class", "group")
-                .style("fill", function (d, i) { return color(i); })
+                .style("fill", function (d, i) { return color(d.voc); })
                 .merge(group);
 
             var link = svg.selectAll(".link")
-                .data(links, d => d.id);
+                .data(fLinks, d => d.id);
             link.exit().remove();
             link = link.enter().append("path")
                 .attr("class", "link")
@@ -306,7 +275,7 @@ onload = () => {
                 .merge(link);
 
             var linkLabelPath = svg.selectAll('.link-label-path')
-                .data(links, d => d.id);
+                .data(fLinks, d => d.id);
             linkLabelPath.exit().remove();
             linkLabelPath = linkLabelPath.enter().append('path')
                 .attr('class', 'link-label-path')
@@ -316,7 +285,7 @@ onload = () => {
                 .merge(linkLabelPath);
 
             var linkLabel = svg.selectAll('.link-label')
-                .data(links, d => d.id);
+                .data(fLinks, d => d.id);
             linkLabel.exit().remove();
             var linkLabelEnter = linkLabel.enter().append("text")
                 .attr('class', 'link-label')
@@ -329,7 +298,7 @@ onload = () => {
             linkLabel = linkLabelEnter.merge(linkLabel);
 
             var node = svg.selectAll(".node")
-                .data(nodes, d => d.res);
+                .data(fNodes, d => d.res);
             node.exit().remove();
             var nodeEnter = node.enter().append("rect")
                 .attr("class", "node")
@@ -342,14 +311,14 @@ onload = () => {
                         window.location = d.res;
                     }
                 })
+                .style("fill", d => d3.schemePastel2[d3.schemePastel2.length - (d.highCardinality ? 1 : 2)])
             nodeEnter.append("title")
                 .filter(d => d.label)
                 .text(function (d) { return d.label; });
-            node = nodeEnter.merge(node)
-                .style("fill", function (d) { return color(groups.length + (d.highCardinality ? 1 : 0)); });
+            node = nodeEnter.merge(node);
 
             var label = svg.selectAll(".label")
-                .data(nodes, d => d.res);
+                .data(fNodes, d => d.res);
                 label.exit().remove();
             var labelEnter = label.enter().append("text")
                 .attr("class", "label")
@@ -361,7 +330,7 @@ onload = () => {
                     if (d.highCardinality) {
                         return `${d.count} resources`;
                     }
-                    return d.index && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label;
+                    return d.res != sourceRes && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label;
                 })
             labelEnter.append("title")
                 .filter(d => d.label)
@@ -371,7 +340,7 @@ onload = () => {
                     var bb = this.getBBox();
                     d.width = bb.width + padding + 2 * margin;
                     d.height = bb.height + padding + 2 * margin;
-                    if (!d.index) {
+                    if (d.res == sourceRes) {
                         d.width += 8 * margin;
                         d.height += 8 * margin;
                     }
@@ -400,7 +369,7 @@ onload = () => {
             group.lower();
 
             instance.on("tick", function () {
-                node.each(function(d) { d.innerBounds = d.bounds.inflate(- (d.index ? margin : 4 * margin)) })
+                node.each(function(d) { d.innerBounds = d.bounds.inflate(- (d.res != sourceRes ? margin : 4 * margin)) })
                     .attr("x", function (d) { return d.innerBounds.x; })
                     .attr("y", function (d) { return d.innerBounds.y; })
                     .attr("width", function(d) { return d.innerBounds.width() })
@@ -438,8 +407,70 @@ onload = () => {
         };
 
         d3.json(`${baseUrl}/neighbors?${params}`, function (data) {
-            loadedData = data;
-            update(data);
+            const sourceNode = { res: sourceRes, label: sourceLabel, type: sourceType };
+            nodes = [sourceNode];
+            links = [];
+            vocgroups = {};
+            const seen = { sourceRes: 0 };
+            const linkCount = {};
+
+            const addItem = (item) => {
+                let node = seen[item.resource.value];
+                if (!node) {
+                    node = {
+                        res: item.resource.value,
+                        label: item.label.value,
+                        type: item.type.value,
+                        typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
+                    };
+                    node.index = nodes.push(node) - 1;
+                    seen[item.resource.value] = node;
+                    const voc = item.resource.value.replace(/^(.*[#/]).*/, '$1');
+                    let voclist = vocgroups[voc];
+                    if (!voclist) {
+                        vocgroups[voc] = [node.index];
+                    } else {
+                        voclist.push(node.index);
+                    }
+                }
+                return node;
+            };
+
+            const addLink = (item, highCardinality) => {
+                if ((item.type && ignoredTypes.includes(item.type.value))
+                        || ignoredLinks.includes(item.prop.value)) {
+                    return;
+                }
+                const outgoing = item.outgoing.value !== 'false';
+                let node;
+                if (highCardinality) {
+                    node = {
+                        highCardinality: true,
+                        prop: item.prop.value,
+                        count: item.count.value,
+                        id: `${item.prop.value} hc`,
+                    };
+                    node.index = nodes.push(node) - 1;
+                } else {
+                    node = addItem(item);
+                }
+                links.push({
+                    source: outgoing ? sourceNode : node,
+                    target: outgoing ? node : sourceNode,
+                    prop: item.prop.value,
+                    label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
+                    id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
+                    outgoing,
+                });
+                links[links.length - 1].index = links.length - 1;
+                linkCount[node.res] = (linkCount[node.res] ?? 0) + 1
+            };
+
+            data.links.forEach(i => addLink(i, false));
+            data.highCardinality.forEach(i => addLink(i, true));
+            console.log(vocgroups);
+            groups = Object.entries(vocgroups).map(([voc, leaves]) => ({ voc, leaves, padding: groupPadding }));
+            update();
         });
     });
 };
