@@ -8,8 +8,125 @@ onload = () => {
     const incomingColor = 'red', outgoingColor = 'blue';
     const baseUrl = d3.select('body').attr('data-base-url');
     const height = 600;
-    const groupPadding = 20;
     const padding = 10, margin = 10;
+
+    function rectCollide() {
+        let nodes, sizes, masses;
+        let size = () => [0, 0];
+        let strength = 1;
+        let iterations = 1;
+
+        const force = () => {
+            const iterate = () => {
+                const centers = nodes.map(d => [d.x + d.vx + d.width / 2, d.y + d.vy + d.height / 2]);
+                for (let i = 0; i < nodes.length - 1; i++) {
+                    const node1 = nodes[i],
+                        size1 = sizes[i],
+                        center1 = centers[i],
+                        mass1 = masses[i];
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        let node2 = nodes[j],
+                            size2 = sizes[j],
+                            center2 = centers[j],
+                            xSize = (size1[0] + size2[0]) / 2,
+                            ySize = (size1[1] + size2[1]) / 2,
+                            dx = center1[0] - center2[0],
+                            dy = center1[1] - center2[1],
+                            adx = Math.abs(dx),
+                            ady = Math.abs(dy),
+                            mass2 = masses[j];
+
+                        if (adx < xSize && ady < ySize) {
+                            const l = Math.sqrt(dx * dx + dy * dy),
+                                m = mass2 / (mass1 + mass2);
+                            if (l > 0) {
+                                node1.vx -= (dx *= (adx - xSize) / l * strength) * m;
+                                node2.vx += dx * (1 - m);
+                                node1.vy -= (dy *= (ady - ySize) / l * strength) * m;
+                                node2.vy += dy * (1 - m);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (let i = 0; i < iterations; i++) {
+                iterate();
+            }
+        };
+
+        force.initialize = n => {
+            sizes = (nodes = n).map(size);
+            masses = sizes.map(d => d[0] * d[1]);
+        };
+
+        force.size = (s, ...x) => {
+            if (typeof s === 'undefined') {
+                return size;
+            }
+            size = typeof s === 'function' ? s : () => s;
+            return force;
+        };
+
+        force.strength = s => typeof s === 'undefined' ? strength : (strength = +s, force);
+
+        force.iterations = i => typeof i === 'undefined' ? strength : (iterations = +i, force);
+
+        return force;
+    }
+
+    function boundedBox() {
+        let nodes, sizes, bounds;
+        let size = () => [0, 0];
+
+        const force = () => {
+            for (const [i, node] of nodes.entries()) {
+                const nodeSize = sizes[i];
+                const xi = node.x + node.vx,
+                    x0 = bounds[0][0] - xi,
+                    x1 = bounds[1][0] - (xi + nodeSize[0]),
+                    yi = node.y + node.vy,
+                    y0 = bounds[0][1] - yi,
+                    y1 = bounds[1][1] - (yi + nodeSize[1]);
+                if (x0 > 0 || x1 < 0) {
+                    node.x += node.vx;
+                    node.vx = -node.vx;
+                    if (node.vx < x0) {
+                        node.x += x0 - node.vx;
+                    }
+                    if (node.vx > x1) {
+                        node.x += x1 - node.vx;
+                    }
+                }
+                if (y0 > 0 || y1 < 0) {
+                    node.y += node.vy;
+                    node.vy = -node.vy;
+                    if (node.vy < y0) {
+                        node.vy += y0 - node.vy;
+                    }
+                    if (node.vy > y1) {
+                        node.vy += y1 - node.vy;
+                    }
+                }
+            }
+        };
+
+        force.initialize = n => {
+            sizes = (nodes = n).map(size)
+        };
+
+        force.bounds = (...b) => typeof b === 'undefined' ? bounds : (bounds = b, force);
+
+        force.size = (s, ...x) => {
+            if (typeof s === 'undefined') {
+                return size;
+            }
+            size = typeof s === 'function' ? s : () => s;
+            return force;
+        };
+
+        return force;
+    }
 
     const profiles = [{
         label: "",
@@ -95,18 +212,7 @@ onload = () => {
         }
     }
 
-    const linkArc = (d) => {
-        const margin = 4;
-
-        const [s, t] = [d.source, d.target].map(r => r.innerBounds);
-        let [start, end] = [s, t].map(r => ({
-          x: (r.x + r.X) / 2,
-          y: (r.y + r.Y) / 2,
-        }));
-        const r = Math.hypot(end.x - start.x, end.y - start.y);
-
-        const {cx, cy} = svgArcToCenterParam(start.x, start.y, r, r, 0, 0, 0, end.x, end.y);
-
+    const arcIntercept = (s, t, cx, cy, r, margin) => {
         let minDist = Infinity, x = null, y;
         const scenter = {x: (s.x + s.X) / 2, y: (s.y + s.Y) / 2}
         for (let yTest of [t.y, t.Y]) {
@@ -141,11 +247,28 @@ onload = () => {
         }
 
         if (x !== null) {
-            end = {
+            return {
               x: x + (x <= t.x ? -margin : margin),
               y: y + (y <= t.y ? -margin : margin),
             };
         }
+        return null;
+    };
+
+    const linkArc = (d) => {
+        const margin = 4;
+
+        const [s, t] = [d.source, d.target].map(r => r.innerBounds);
+        let [start, end] = [s, t].map(r => ({
+          x: (r.x + r.X) / 2,
+          y: (r.y + r.Y) / 2,
+        }));
+        const r = Math.hypot(end.x - start.x, end.y - start.y);
+
+        const {cx, cy} = svgArcToCenterParam(start.x, start.y, r, r, 0, 0, 0, end.x, end.y);
+
+        end = arcIntercept(s, t, cx, cy, r, margin) || end;
+        start = arcIntercept(t, s, cx, cy, r, 0) || start;
 
         d.arc = { start, end, r, cx, cy };
 
@@ -171,9 +294,8 @@ onload = () => {
 
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
-        const instance = cola.d3adaptor(d3)
-            .avoidOverlaps(true)
-            .size([width, height]);
+        const simulation = d3.forceSimulation()
+            .alphaTarget(0.3)
 
         const svg = wrapper.append("svg")
             .attr("width", width)
@@ -210,7 +332,7 @@ onload = () => {
             start: 0,
         };
 
-        var nodes, links, groups;
+        var nodes, links;
 
         const [sourceRes, sourceLabel, sourceType] = [
             wrapper.attr('data-res'),
@@ -219,9 +341,40 @@ onload = () => {
         ];
         params = new URLSearchParams({ res: sourceRes });
 
+        let node;
+
+        let dragParams = {};
+        const drag = d3.drag()
+            .on('start', (ev, d) => {
+                node.filter(n => n.res === d.res).raise();
+                if (d.res === sourceRes) {
+                    dragParams = null;
+                } else {
+                    dragParams = {
+                        pos: [ev.x, ev.y],
+                        offset: [ev.x - d.x, ev.y - d.y],
+                    };
+                    d.fx = d.x;
+                    d.fy = d.y;
+                }
+            })
+            .on('drag', (ev, d) => {
+                if (!dragParams) {
+                    return;
+                }
+                d.fx = Math.max(Math.min((dragParams.pos[0] = ev.x) - dragParams.offset[0], width - d.width), 0);
+                d.fy = Math.max(Math.min((dragParams.pos[1] = ev.y) - dragParams.offset[1], height - d.height), 0);
+            })
+            .on('end', (ev, d) => {
+                if (dragParams) {
+                    d.fx = null;
+                    d.fy = null;
+                }
+            });
+
         const update = function(filters) {
 
-            var fNodes = nodes, fLinks = links, fGroups = groups;
+            var fNodes = nodes, fLinks = links;
 
             if (filters) {
                 if (filters.res) {
@@ -234,8 +387,6 @@ onload = () => {
                     let filteredNodes = fLinks.map(l => l.source.res == sourceRes ? l.target.res : l.source.res);
                     fNodes = fNodes.filter(n => n.res == sourceRes || filteredNodes.includes(n.res));
                 }
-                let fNodeIndexes = fNodes.map(n => n.index);
-                fGroups = fGroups.filter(g => g.leaves.some(i => fNodeIndexes.includes(i)));
             }
 
             const linkCount = {};
@@ -244,136 +395,144 @@ onload = () => {
                 linkCount[n] = (linkCount[n] || 0) + 1;
             });
 
-            console.log(fNodes, fLinks, fGroups);
+            const link = svg.selectAll(".link")
+                .data(fLinks, d => d.id)
+                .join(
+                    enter => enter.append("path"),
+                    u => u,
+                    exit => exit.remove())
+                        .attr("class", "link")
+                        .attr("fill", "none")
+                        .attr("stroke", d => d.outgoing ? outgoingColor : incomingColor)
+                        .attr("stroke-width", "1.5px")
+                        .attr("stroke-opacity", "1")
+                        .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`) ;
 
-            instance
-                .linkDistance(d => 140 * (linkCount[d.source.res == sourceRes ? d.target.res : d.source.res] || 1))
-                .nodes(fNodes)
-                .links(fLinks)
-                .groups(fGroups)
-                .start();
+            const linkLabelPath = svg.selectAll('.link-label-path')
+                .data(fLinks, d => d.id)
+                .join(
+                    enter => enter.append("path"),
+                    u => u,
+                    exit => exit.remove()
+                )
+                    .attr('class', 'link-label-path')
+                    .attr('fill', 'none')
+                    .attr('stroke-width', '1px')
+                    .attr('id', d => `link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`);
 
-            var group = svg.selectAll(".group")
-                .data(fGroups, d => d.voc);
-            group.exit().remove();
-            group = group.enter().append("rect")
-                .attr("rx", 8).attr("ry", 8)
-                .attr("class", "group")
-                .style("fill", function (d, i) { return color(d.voc); })
-                .merge(group);
+            const linkLabel = svg.selectAll('.link-label')
+                .data(fLinks, d => d.id)
+                .join(
+                    enter => {
+                        const t = enter.append("text");
+                        t.append('textPath')
+                            .attr('startOffset', '50%')
+                            .attr('xlink:href', d => `#link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
+                            .text(d => d.label);
+                        return t;
+                    },
+                    u => u,
+                    exit => exit.remove()
+                )
+                    .attr('class', 'link-label')
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '10px');
 
-            var link = svg.selectAll(".link")
-                .data(fLinks, d => d.id);
-            link.exit().remove();
-            link = link.enter().append("path")
-                .attr("class", "link")
-                .attr("fill", "none")
-                .attr("stroke", d => d.outgoing ? outgoingColor : incomingColor)
-                .attr("stroke-width", "1.5px")
-                .attr("stroke-opacity", "1")
-                .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`)
-                .merge(link);
-
-            var linkLabelPath = svg.selectAll('.link-label-path')
-                .data(fLinks, d => d.id);
-            linkLabelPath.exit().remove();
-            linkLabelPath = linkLabelPath.enter().append('path')
-                .attr('class', 'link-label-path')
-                .attr('fill', 'none')
-                .attr('stroke-width', '1px')
-                .attr('id', d => `link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
-                .merge(linkLabelPath);
-
-            var linkLabel = svg.selectAll('.link-label')
-                .data(fLinks, d => d.id);
-            linkLabel.exit().remove();
-            var linkLabelEnter = linkLabel.enter().append("text")
-                .attr('class', 'link-label')
-                .attr('text-anchor', 'middle')
-                .attr('font-size', '10px')
-            linkLabelEnter.append('textPath')
-                .attr('startOffset', '50%')
-                .attr('xlink:href', d => `#link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
-                .text(d => d.label);
-            linkLabel = linkLabelEnter.merge(linkLabel);
-
-            var node = svg.selectAll(".node")
-                .data(fNodes, d => d.res);
-            node.exit().remove();
-            var nodeEnter = node.enter().append("rect")
-                .attr("class", "node")
-                .attr("rx", 5).attr("ry", 5)
-                .attr("stroke", "white")
-                .attr("stroke-width", "1.5px")
-                .attr("cursor", d => d.highCardinality ? "help" : "pointer")
-                .on('click', function(d) {
-                    if (d.res) {
-                        window.location = d.res;
-                    }
-                })
-                .style("fill", d => d3.schemePastel2[d3.schemePastel2.length - (d.highCardinality ? 1 : 2)])
-            nodeEnter.append("title")
-                .filter(d => d.label)
-                .text(function (d) { return d.label; });
-            node = nodeEnter.merge(node);
-
-            var label = svg.selectAll(".label")
-                .data(fNodes, d => d.res);
-                label.exit().remove();
-            var labelEnter = label.enter().append("text")
-                .attr("class", "label")
-                .attr("text-anchor", "middle")
-                .attr("cursor", d => d.highCardinality ? "help" : "pointer")
-                .attr("font-size", "12px")
-                .attr('style', 'pointer-events: none')
-                .text(function (d) {
-                    if (d.highCardinality) {
-                        return `${d.count} resources`;
-                    }
-                    return d.res != sourceRes && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label;
-                })
-            labelEnter.append("title")
-                .filter(d => d.label)
-                .text(d => d.label);
-            label = labelEnter.merge(label)
-                .each(function(d) {
-                    var bb = this.getBBox();
-                    d.width = bb.width + padding + 2 * margin;
-                    d.height = bb.height + padding + 2 * margin;
-                    if (d.res == sourceRes) {
-                        d.width += 8 * margin;
-                        d.height += 8 * margin;
-                    }
-                });
-
-            var popup = svg.append('g')
-                .attr('class', 'node-detail')
-                .style('opacity', 0);
-
-            popup.append('rect')
-                .attr('class', 'popup-node')
-                .attr("rx", 5).attr("ry", 5)
-                .attr("stroke", "white")
-                .attr("stroke-width", "1.5px")
-                .attr("cursor", "pointer")
-                .style("fill", function (d) { return color(groups.length); });
-
-            popup.append('text')
-                .attr('class', 'popup-label')
-                .attr("text-anchor", "middle")
-                .attr("cursor", "pointer")
-                .attr("font-size", "12px");
+            node = svg.selectAll('.node')
+                .data(fNodes, d => d.res)
+                .join(
+                    enter => {
+                        const g = enter.append("g")
+                            .attr('class', 'node')
+                            .attr('data-uri', d => d.res);
+                        g.append('rect')
+                            .attr('rx', 5)
+                            .attr('ry', 5)
+                            .attr('stroke', 'white')
+                            .attr('stroke-width', '1.5px')
+                            .attr('cursor', d => d.res === sourceRes ? null : 'pointer')
+                            .style("fill", d => color(d.highCardinality ? 'highCardinality' : d.type))
+                            .on('click', (ev, d) => {
+                                if (d.res) {
+                                    window.location = d.res;
+                                }
+                            })
+                            .on('mouseover', (ev, d) => {
+                                if (d.res === sourceRes) {
+                                    return;
+                                }
+                                [link, linkLabel].forEach(x =>
+                                    x.style('opacity', function(l) {
+                                        return [l.source.res, l.target.res].includes(d.res) ? (d3.select(this).raise(), 1) : 0.1;
+                                    }));
+                                node.style('opacity', function(n) {
+                                    return [d.res, sourceRes].includes(n.res) ? (d3.select(this).raise(), 1) : 0.4;
+                                });
+                            })
+                            .on('mouseout', (ev, d) => {
+                                [node, link, linkLabel].forEach(x => x.style('opacity', 1));
+                                node.raise();
+                            })
+                            .call(drag)
+                            .append("title")
+                            .filter(d => d.label)
+                            .text(d => d.label);
+                        g.append('text')
+                            .attr("class", "label")
+                            .attr("cursor", d => d.highCardinality ? "help" : "pointer")
+                            .attr("font-size", "12px")
+                            .attr('style', 'pointer-events: none')
+                            .attr('data-uri', d => d.res)
+                            .text(function (d) {
+                                if (d.highCardinality) {
+                                    return `${d.count} resources`;
+                                }
+                                return d.res != sourceRes && d.label.length > 30 ? d.label.substring(0, 29) + "…" : d.label;
+                            })
+                            .each(function(d) {
+                                var bb = this.getBBox();
+                                d.width = bb.width + 2 * padding + margin;
+                                d.height = bb.height + 2 * padding + margin;
+                                if (d.res == sourceRes) {
+                                    d.fx = (width - d.width) / 2;
+                                    d.fy = (height - d.height) / 2;
+                                }
+                            });
+                        return g;
+                    },
+                    u => u,
+                    exit => exit.remove()
+                );
 
             link.lower();
             linkLabel.lower();
-            group.lower();
 
-            instance.on("tick", function () {
-                node.each(function(d) { d.innerBounds = d.bounds.inflate(- (d.res != sourceRes ? margin : 4 * margin)) })
-                    .attr("x", function (d) { return d.innerBounds.x; })
-                    .attr("y", function (d) { return d.innerBounds.y; })
-                    .attr("width", function(d) { return d.innerBounds.width() })
-                    .attr("height", function(d) { return d.innerBounds.height() });
+            simulation.nodes(fNodes)
+                .force('charge', d3.forceManyBody().strength(-800))
+                .force('link', d3.forceLink(links)
+                    .distance(d => 150 + (20 * Math.random()) + 50 * (linkCount[d.source.res == sourceRes ? d.target.res : d.source.res] || 1))
+                        .strength(0.1)
+                    )
+                //.force('collision', rectCollide().size(d => [d.width, d.height]).strength(3))
+                .force('box', boundedBox().bounds([0, 0], [width, height]).size(d => [d.width, d.height]))
+                .force('x', d3.forceX(width / 2))
+                .force('y', d3.forceY(height / 2));
+
+            simulation.on("tick", function () {
+                node.each(function(d) {
+                        d.innerBounds = {
+                            x: d.x + margin / 2,
+                            y: d.y + margin / 2,
+                            width: d.width - margin,
+                            height: d.height - margin,
+                        };
+                        d.innerBounds.X = d.innerBounds.x + d.innerBounds.width;
+                        d.innerBounds.Y = d.innerBounds.y + d.innerBounds.height;
+                    })
+                node.selectAll('rect').attr("x", d => d.innerBounds.x)
+                    .attr("y", d => d.innerBounds.y)
+                    .attr("width", d => d.innerBounds.width)
+                    .attr("height", d => d.innerBounds.height);
 
                 link.attr("d", linkArc);
 
@@ -393,84 +552,70 @@ onload = () => {
                     `;
                 });
 
-                group.attr("x", function (d) { return d.bounds.x + groupPadding / 2; })
-                     .attr("y", function (d) { return d.bounds.y + groupPadding / 2; })
-                    .attr("width", function (d) { return d.bounds.width() - groupPadding })
-                    .attr("height", function (d) { return d.bounds.height() - groupPadding });
-
-                label.attr("x", function (d) { return d.x })
+                node.selectAll('.label').attr("x", function (d) { return d.innerBounds.x + padding })
                      .attr("y", function (d) {
                          var h = this.getBBox().height;
-                         return d.y + padding / 2;
+                         return d.innerBounds.y + d.innerBounds.height / 2 - h / 2 + padding;
                      });
             });
         };
 
-        d3.json(`${baseUrl}/neighbors?${params}`, function (data) {
-            const sourceNode = { res: sourceRes, label: sourceLabel, type: sourceType };
-            nodes = [sourceNode];
-            links = [];
-            vocgroups = {};
-            const seen = { sourceRes: 0 };
-            const linkCount = {};
+        d3.json(`${baseUrl}/neighbors?${params}`)
+            .then(data => {
+                const sourceNode = { res: sourceRes, label: sourceLabel, type: sourceType };
+                nodes = [sourceNode];
+                links = [];
+                const seen = { sourceRes: 0 };
+                const linkCount = {};
 
-            const addItem = (item) => {
-                let node = seen[item.resource.value];
-                if (!node) {
-                    node = {
-                        res: item.resource.value,
-                        label: item.label.value,
-                        type: item.type.value,
-                        typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
-                    };
-                    node.index = nodes.push(node) - 1;
-                    seen[item.resource.value] = node;
-                    const voc = item.resource.value.replace(/^(.*[#/]).*/, '$1');
-                    let voclist = vocgroups[voc];
-                    if (!voclist) {
-                        vocgroups[voc] = [node.index];
-                    } else {
-                        voclist.push(node.index);
+                const addItem = (item) => {
+                    let node = seen[item.resource.value];
+                    if (!node) {
+                        node = {
+                            res: item.resource.value,
+                            label: item.label.value,
+                            type: item.type.value,
+                            typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
+                        };
+                        node.index = nodes.push(node) - 1;
+                        seen[item.resource.value] = node;
                     }
-                }
-                return node;
-            };
+                    return node;
+                };
 
-            const addLink = (item, highCardinality) => {
-                if ((item.type && ignoredTypes.includes(item.type.value))
-                        || ignoredLinks.includes(item.prop.value)) {
-                    return;
-                }
-                const outgoing = item.outgoing.value !== 'false';
-                let node;
-                if (highCardinality) {
-                    node = {
-                        highCardinality: true,
+                const addLink = (item, highCardinality) => {
+                    if ((item.type && ignoredTypes.includes(item.type.value))
+                            || ignoredLinks.includes(item.prop.value)) {
+                        return;
+                    }
+                    const outgoing = item.outgoing.value !== 'false';
+                    let node;
+                    if (highCardinality) {
+                        node = {
+                            highCardinality: true,
+                            prop: item.prop.value,
+                            count: item.count.value,
+                            id: `${item.prop.value} hc`,
+                        };
+                        node.index = nodes.push(node) - 1;
+                    } else {
+                        node = addItem(item);
+                    }
+                    links.push({
+                        source: outgoing ? sourceNode : node,
+                        target: outgoing ? node : sourceNode,
                         prop: item.prop.value,
-                        count: item.count.value,
-                        id: `${item.prop.value} hc`,
-                    };
-                    node.index = nodes.push(node) - 1;
-                } else {
-                    node = addItem(item);
-                }
-                links.push({
-                    source: outgoing ? sourceNode : node,
-                    target: outgoing ? node : sourceNode,
-                    prop: item.prop.value,
-                    label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
-                    id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
-                    outgoing,
-                });
-                links[links.length - 1].index = links.length - 1;
-                linkCount[node.res] = (linkCount[node.res] ?? 0) + 1
-            };
+                        label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
+                        id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
+                        outgoing,
+                    });
+                    links[links.length - 1].index = links.length - 1;
+                    linkCount[node.res] = (linkCount[node.res] ?? 0) + 1
+                };
 
-            data.links.forEach(i => addLink(i, false));
-            data.highCardinality.forEach(i => addLink(i, true));
-            console.log(vocgroups);
-            groups = Object.entries(vocgroups).map(([voc, leaves]) => ({ voc, leaves, padding: groupPadding }));
-            update();
-        });
+                data.links.forEach(i => addLink(i, false));
+                data.highCardinality.forEach(i => addLink(i, true));
+                update();
+            });
     });
 };
