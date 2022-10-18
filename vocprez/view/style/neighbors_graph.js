@@ -4,6 +4,12 @@ onload = () => {
             label: 'All links',
         },
         {
+            label: 'Provenance',
+            filters: {
+                prop: p => p.startsWith('http://www.w3.org/ns/prov#'),
+            },
+        },
+        {
             label: 'OGC Metamodel',
             filters: {
                 prop: p => p.startsWith('http://www.opengis.net/def/metamodel/'),
@@ -442,7 +448,7 @@ onload = () => {
                             .style("fill", d => color(d.highCardinality ? 'highCardinality' : d.type))
                             .on('click', (ev, d) => {
                                 if (d.res) {
-                                    window.location = `${baseUrl}/object?uri=${encodeURIComponent(d.res)}`;
+                                    window.location = `${baseUrl}/object?uri=${encodeURIComponent(d.res)}&_profile=skos`;
                                 }
                             })
                             .on('mouseover', (ev, d) => {
