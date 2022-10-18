@@ -1,79 +1,34 @@
 onload = () => {
+    const tabFilters = [
+        {
+            label: 'All links',
+        },
+        {
+            label: 'OGC Metamodel',
+            filters: {
+                prop: p => p.startsWith('http://www.opengis.net/def/metamodel/'),
+            },
+        },
+        {
+            label: 'OGC Spec',
+            filters: {
+                prop: p => p.startsWith('http://www.opengis.net/def/ont/specrel/'),
+            }
+        },
+        {
+            label: 'SKOS',
+            filters: {
+                prop: p => p.startsWith('http://www.w3.org/2004/02/skos/core#'),
+            },
+        },
+    ];
     const ignoredLinks = [
         'http://www.opengis.net/def/metamodel/ogc-na/status',
-    ];
-    const ignoredTypes = [
-        // SKOS!
     ];
     const incomingColor = 'red', outgoingColor = 'blue';
     const baseUrl = d3.select('body').attr('data-base-url');
     const height = 600;
     const padding = 10, margin = 10;
-
-    function rectCollide() {
-        let nodes, sizes, masses;
-        let size = () => [0, 0];
-        let strength = 1;
-        let iterations = 1;
-
-        const force = () => {
-            const iterate = () => {
-                const centers = nodes.map(d => [d.x + d.vx + d.width / 2, d.y + d.vy + d.height / 2]);
-                for (let i = 0; i < nodes.length - 1; i++) {
-                    const node1 = nodes[i],
-                        size1 = sizes[i],
-                        center1 = centers[i],
-                        mass1 = masses[i];
-                    for (let j = i + 1; j < nodes.length; j++) {
-                        let node2 = nodes[j],
-                            size2 = sizes[j],
-                            center2 = centers[j],
-                            xSize = (size1[0] + size2[0]) / 2,
-                            ySize = (size1[1] + size2[1]) / 2,
-                            dx = center1[0] - center2[0],
-                            dy = center1[1] - center2[1],
-                            adx = Math.abs(dx),
-                            ady = Math.abs(dy),
-                            mass2 = masses[j];
-
-                        if (adx < xSize && ady < ySize) {
-                            const l = Math.sqrt(dx * dx + dy * dy),
-                                m = mass2 / (mass1 + mass2);
-                            if (l > 0) {
-                                node1.vx -= (dx *= (adx - xSize) / l * strength) * m;
-                                node2.vx += dx * (1 - m);
-                                node1.vy -= (dy *= (ady - ySize) / l * strength) * m;
-                                node2.vy += dy * (1 - m);
-                            }
-                        }
-                    }
-                }
-            }
-
-            for (let i = 0; i < iterations; i++) {
-                iterate();
-            }
-        };
-
-        force.initialize = n => {
-            sizes = (nodes = n).map(size);
-            masses = sizes.map(d => d[0] * d[1]);
-        };
-
-        force.size = (s, ...x) => {
-            if (typeof s === 'undefined') {
-                return size;
-            }
-            size = typeof s === 'function' ? s : () => s;
-            return force;
-        };
-
-        force.strength = s => typeof s === 'undefined' ? strength : (strength = +s, force);
-
-        force.iterations = i => typeof i === 'undefined' ? strength : (iterations = +i, force);
-
-        return force;
-    }
 
     function boundedBox() {
         let nodes, sizes, bounds;
@@ -138,9 +93,9 @@ onload = () => {
     };
 
     const radian = (ux, uy, vx, vy) => {
-        var dot = ux * vx + uy * vy;
-        var mod = Math.sqrt( ( ux * ux + uy * uy ) * ( vx * vx + vy * vy ) );
-        var rad = Math.acos( dot / mod );
+        const dot = ux * vx + uy * vy;
+        const mod = Math.sqrt( ( ux * ux + uy * uy ) * ( vx * vx + vy * vy ) );
+        const rad = Math.acos( dot / mod );
         return ux * vy - uy * vx < 0.0 ? -rad : rad;
     }
 
@@ -283,23 +238,38 @@ onload = () => {
         const width = wrapper.node().offsetWidth;
         var loadedData = null;
 
-        // Profile selector
-        wrapper.append('button')
-            .text('Click me')
-            .on('click', () => {
-                update({
-                    prop: p => Math.random() > 0.5,
-                });
-            });
-
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
         const simulation = d3.forceSimulation()
-            .alphaTarget(0.3)
+            .alphaTarget(0.3);
+
+        const tabs = wrapper.append('div')
+            .attr('class', 'tabs')
+            .selectAll('.tab')
+            .data(tabFilters)
+            .join(enter => enter.append('a')
+                .attr('href', '#')
+                .attr('class', 'tab')
+                .classed('active', (d, i) => !i)
+                .text(d => d.label)
+            )
+            .on('click', function(ev, d) {
+                ev.preventDefault();
+                const $this = d3.select(this);
+                if ($this.classed('active')) {
+                    return;
+                }
+                tabs.classed('active', false);
+                $this.classed('active', true);
+                update(d.filters);
+            });
 
         const svg = wrapper.append("svg")
             .attr("width", width)
             .attr("height", height);
+
+        const legend = wrapper.append("div")
+            .attr('class', 'legend');
 
         svg.append("defs").append("marker")
               .attr("id", d => `arrow-outgoing`)
@@ -373,6 +343,24 @@ onload = () => {
             });
 
         const update = function(filters) {
+
+            const legendClasses = [...new Map(nodes.filter(d => d.type).map(d => [d.type, d])).values()];
+            legend.selectAll('.legend-entry')
+                .data(legendClasses)
+                .join(
+                    enter => {
+                        const e = enter.append('div')
+                            .attr('class', 'legend-entry')
+                            .attr('title', d => d.type);
+                        e.append('span')
+                            .attr('class', 'legend-entry-marker')
+                            .style('background-color', d => color(d.type));
+                        e.append('span')
+                            .attr('class', 'legend-entry-label')
+                            .text(d => d.typeLabel);
+                        return e;
+                    }
+                );
 
             var fNodes = nodes, fLinks = links;
 
@@ -454,7 +442,7 @@ onload = () => {
                             .style("fill", d => color(d.highCardinality ? 'highCardinality' : d.type))
                             .on('click', (ev, d) => {
                                 if (d.res) {
-                                    window.location = d.res;
+                                    window.location = `${baseUrl}/object?uri=${encodeURIComponent(d.res)}`;
                                 }
                             })
                             .on('mouseover', (ev, d) => {
@@ -508,15 +496,14 @@ onload = () => {
             linkLabel.lower();
 
             simulation.nodes(fNodes)
-                .force('charge', d3.forceManyBody().strength(-800))
+                .force('charge', d3.forceManyBody().strength(-300))
                 .force('link', d3.forceLink(links)
                     .distance(d => 150 + (20 * Math.random()) + 50 * (linkCount[d.source.res == sourceRes ? d.target.res : d.source.res] || 1))
-                        .strength(0.1)
-                    )
-                //.force('collision', rectCollide().size(d => [d.width, d.height]).strength(3))
+                    .strength(0.01))
                 .force('box', boundedBox().bounds([0, 0], [width, height]).size(d => [d.width, d.height]))
-                .force('x', d3.forceX(width / 2))
-                .force('y', d3.forceY(height / 2));
+                //.force('x', d3.forceX(width / 2))
+                //.force('y', d3.forceY(height / 2));
+                .force('radial', d3.forceRadial(d => Math.min(width, height) / (5 - 2 * ((linkCount[d.res] || 1) - 1)), width / 2, height / 2))
 
             simulation.on("tick", function () {
                 node.each(function(d) {
@@ -584,8 +571,7 @@ onload = () => {
                 };
 
                 const addLink = (item, highCardinality) => {
-                    if ((item.type && ignoredTypes.includes(item.type.value))
-                            || ignoredLinks.includes(item.prop.value)) {
+                    if (ignoredLinks.includes(item.prop.value)) {
                         return;
                     }
                     const outgoing = item.outgoing.value !== 'false';
@@ -615,7 +601,7 @@ onload = () => {
 
                 data.links.forEach(i => addLink(i, false));
                 data.highCardinality.forEach(i => addLink(i, true));
-                update();
+                update(tabFilters[0]?.filter);
             });
     });
 };

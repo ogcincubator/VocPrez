@@ -1,0 +1,44 @@
+.neighbors-graph .legend {
+    display: flex;
+    justify-content: center;
+}
+
+.neighbors-graph .legend .legend-entry {
+    margin: 0.7em;
+}
+
+.neighbors-graph .legend .legend-entry-marker {
+    vertical-align: middle;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
+    margin-right: 0.25em;
+}
+
+.neighbors-graph .tabs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.neighbors-graph .tab {
+    padding: 0.3em 0.7em;
+    margin: 0 0.5em;
+    text-transform: uppercase;
+    border-bottom: 2px solid transparent;
+    text-decoration: none;
+    color: #005A9C;
+}
+
+.neighbors-graph .tab:hover {
+    text-decoration: none;
+    border-bottom-color: #b3ddff;
+}
+
+.neighbors-graph .tab:first-child {
+    border-left: none;
+}
+
+.neighbors-graph .tab.active {
+    border-bottom-color: #337ab7;
+}
