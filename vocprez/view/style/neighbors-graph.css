@@ -1,3 +1,7 @@
+.neighbors-graph {
+    clear: both;
+}
+
 .neighbors-graph .legend {
     display: flex;
     justify-content: center;

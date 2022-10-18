@@ -1,3 +1,13 @@
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<script src="{{ url_for('static', filename='neighbors_graph.js') }}"></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='neighbors-graph.css') }}"/>
+<div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ (label if label else uri)|e }}">
+  <div class="high-cardinality-modal hidden">
+    <div class="title-bar">
+      <div class="property">
+        <a href="#"></a>
+      </div>
+      <span class="close-modal">&times;</span>
+    </div>
+    <ul class="objects">
+    </ul>
+    <div class="pagination"></div>
+  </div>
+</div>

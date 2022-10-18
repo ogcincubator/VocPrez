@@ -406,7 +406,7 @@ onload = () => {
                     .attr('class', 'link-label-path')
                     .attr('fill', 'none')
                     .attr('stroke-width', '1px')
-                    .attr('id', d => `link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`);
+                    .attr('id', d => `link-label-path-${toId(d.id)}`);
 
             const linkLabel = svg.selectAll('.link-label')
                 .data(fLinks, d => d.id)
@@ -415,7 +415,7 @@ onload = () => {
                         const t = enter.append("text");
                         t.append('textPath')
                             .attr('startOffset', '50%')
-                            .attr('xlink:href', d => `#link-label-path-${toId(d.source.res)}-${toId(d.target.res)}`)
+                            .attr('xlink:href', d => `#link-label-path-${toId(d.id)}`)
                             .text(d => d.label);
                         return t;
                     },
@@ -575,7 +575,7 @@ onload = () => {
                         return;
                     }
                     const outgoing = item.outgoing.value !== 'false';
-                    let node;
+                    let node, id;
                     if (highCardinality) {
                         node = {
                             highCardinality: true,
@@ -584,15 +584,17 @@ onload = () => {
                             id: `${item.prop.value} hc`,
                         };
                         node.index = nodes.push(node) - 1;
+                        id = node.id;
                     } else {
                         node = addItem(item);
+                        id = `${item.prop.value} ${item.resource.value} ${outgoing}`;
                     }
                     links.push({
                         source: outgoing ? sourceNode : node,
                         target: outgoing ? node : sourceNode,
                         prop: item.prop.value,
                         label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
-                        id: `${item.prop.value} ${item.resource.value} ${outgoing}`,
+                        id,
                         outgoing,
                     });
                     links[links.length - 1].index = links.length - 1;

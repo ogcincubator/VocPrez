@@ -34,19 +34,9 @@
       <dd><a href="{{ utils.get_content_uri(vocab_uri) }}">{{ vocab_title }}</a></dd>
       {% endif %}
     </dl>
-    <div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ concept.prefLabel|e }}">
-      <div class="high-cardinality-modal hidden">
-        <div class="title-bar">
-          <div class="property">
-            <a href="#"></a>
-          </div>
-          <span class="close-modal">&times;</span>
-        </div>
-        <ul class="objects">
-        </ul>
-        <div class="pagination"></div>
-      </div>
-    </div>
+    {% with label=concept.prefLabel %}
+        {% include "neighbors_graph.html" %}
+    {% endwith %}
   </div>
 
   <div style="grid-column: 1; grid-row: 3;">
@@ -174,5 +164,5 @@
 {% endblock %}
 
 {% block bottomjs %}
-  {% include "neighbors_graph.html" %}
+  {% include "neighbors_graph_js.html" %}
 {% endblock %}
