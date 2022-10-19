@@ -255,7 +255,7 @@ onload = () => {
         const simulation = d3.forceSimulation()
             .alphaTarget(0.3);
 
-        const tabs = wrapper.append('div')
+        const tabs = wrapper.insert('div', ':first-child')
             .attr('class', 'tabs')
             .selectAll('.tab')
             .data(tabFilters)
