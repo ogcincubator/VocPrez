@@ -377,7 +377,7 @@ onload = () => {
 
                 let yAligned = false;
                 if (yCenter2 >= height) { // closer to bottom
-                    if (bbox.y + bbox.height + ttheight < height) { // fits under node
+                    if (bbox.y + bbox.height + ttheight < height) { // fits below node
                         yAligned = true;
                         top = bbox.y + bbox.height;
                     } else {
@@ -387,7 +387,7 @@ onload = () => {
                     yAligned = true;
                     top = bbox.y - ttheight;
                 } else {
-                    top = bbox.y;
+                    top = Math.max(0, bbox.y + bbox.height - ttheight + margin);
                 }
 
                 if (xCenter2 >= width) { // closer to right
