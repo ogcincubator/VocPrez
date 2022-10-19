@@ -417,20 +417,29 @@ onload = () => {
             }
         };
 
-        const addLinkTooltipEvents = x =>
-            x.on('mouseover', (ev, d) => {
-                let html = `<div class="tooltip-title">${escapeHtml(d.label)}</div>
-                              <div class="tooltip-uri">${escapeHtml(d.prop)}</div>`;
-                if (d.desc) {
-                    html += `<p className="tooltip-desc">${escapeHtml(d.desc)}</p>`;
-                }
-                updateTooltip(html, ev.target);
-            })
-            .on('mouseout', (ev, d) => {
-                updateTooltip(false);
-            });
-
         const update = function(filters) {
+
+            const addLinkTooltipEvents = x =>
+                x.on('mouseover', (ev, d) => {
+                    [link, linkLabel].forEach(x =>
+                        x.style('opacity', function(l) {
+                            return l.id === d.id ? (d3.select(this).raise(), 1) : 0.1;
+                        }));
+                    node.style('opacity', function(n) {
+                        return [d.source.res, d.target.res, sourceRes].includes(n.res) ? (d3.select(this).raise(), 1) : 0.4;
+                    });
+                    let html = `<div class="tooltip-title">${escapeHtml(d.label)}</div>
+                                  <div class="tooltip-uri">${escapeHtml(d.prop)}</div>`;
+                    if (d.desc) {
+                        html += `<p className="tooltip-desc">${escapeHtml(d.desc)}</p>`;
+                    }
+                    updateTooltip(html, ev.target);
+                })
+                .on('mouseout', (ev, d) => {
+                    [node, link, linkLabel].forEach(x => x.style('opacity', 1));
+                    node.raise();
+                    updateTooltip(false);
+                });
 
             const legendClasses = [...new Map(nodes.filter(d => d.type).map(d => [d.type, d])).values()];
             legend.selectAll('.legend-entry')

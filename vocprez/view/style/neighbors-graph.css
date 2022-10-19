@@ -61,7 +61,7 @@
     border-radius: 5px;
     padding: 5px;
     position: absolute;
-    z-index: 999;
+    z-index: -999;
     border: 2px solid #ddd;
     transition: opacity 0.2s;
     max-width: 20em;
@@ -69,6 +69,7 @@
 }
 
 .neighbors-graph .neighbor-tooltip.visible {
+    z-index: 999;
     opacity: 1;
 }
 
