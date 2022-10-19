@@ -423,7 +423,7 @@ onload = () => {
                             return l.id === d.id ? (d3.select(this).raise(), 1) : 0.1;
                         }));
                     node.style('opacity', function(n) {
-                        return [d.source.res, d.target.res, sourceRes].includes(n.res) ? (d3.select(this).raise(), 1) : 0.4;
+                        return [d.source, d.target].includes(n) ? (d3.select(this).raise(), 1) : 0.4;
                     });
                     let html = `<div class="tooltip-title">${escapeHtml(d.label)}</div>
                                   <div class="tooltip-uri">${escapeHtml(d.prop)}</div>`;
@@ -467,14 +467,16 @@ onload = () => {
                 if (filters.prop) {
                     fLinks = fLinks.filter(l => filters.prop(l.prop));
                     let filteredNodes = fLinks.map(l => l.source.res == sourceRes ? l.target.res : l.source.res);
-                    fNodes = fNodes.filter(n => n.res == sourceRes || filteredNodes.includes(n.res));
+                    fNodes = fNodes.filter(n => n.highCardinality
+                        ? filters.prop(n.prop)
+                        : n.res == sourceRes || filteredNodes.includes(n.res));
                 }
             }
 
             const linkCount = {};
             fLinks.forEach(l => {
-                const n = l.source.res == sourceRes ? l.target.res : l.source.res;
-                linkCount[n] = (linkCount[n] || 0) + 1;
+                const n = l.source.res == sourceRes ? l.target : l.source;
+                linkCount[n.id] = (linkCount[n.id] || 0) + 1;
             });
 
             const link = svg.selectAll(".link")
@@ -547,17 +549,26 @@ onload = () => {
                                 }
                                 [link, linkLabel].forEach(x =>
                                     x.style('opacity', function(l) {
-                                        return [l.source.res, l.target.res].includes(d.res) ? (d3.select(this).raise(), 1) : 0.1;
+                                        return ([l.source, l.target].includes(d))
+                                            ? (d3.select(this).raise(), 1) : 0.1;
                                     }));
                                 node.style('opacity', function(n) {
-                                    return [d.res, sourceRes].includes(n.res) ? (d3.select(this).raise(), 1) : 0.4;
+                                    return (n.res === sourceRes
+                                        || (d.highCardinality
+                                            ? n.highCardinality && n.prop == d.prop
+                                            : [d.res, sourceRes].includes(n.res)))
+                                        ? (d3.select(this).raise(), 1) : 0.4;
                                 });
-                                updateTooltip(
-                                    `<div class="tooltip-title">${escapeHtml(d.label)}</div>
-                                        <div class="tooltip-uri">${escapeHtml(d.res)}</div>
-                                        <div class="tooltip-class">Class: ${escapeHtml(d.typeLabel)}
-                                            <div class="tooltip-class-uri">${escapeHtml(d.type)}</div>
-                                        </div>`, ev.target);
+                                if (d.highCardinality) {
+                                    updateTooltip("Click to see details", ev.target);
+                                } else {
+                                    updateTooltip(
+                                        `<div class="tooltip-title">${escapeHtml(d.label)}</div>
+                                            <div class="tooltip-uri">${escapeHtml(d.res)}</div>
+                                            <div class="tooltip-class">Class: ${escapeHtml(d.typeLabel)}
+                                                <div class="tooltip-class-uri">${escapeHtml(d.type)}</div>
+                                            </div>`, ev.target);
+                                }
                             })
                             .on('mouseout', (ev, d) => {
                                 [node, link, linkLabel].forEach(x => x.style('opacity', 1));
@@ -601,12 +612,11 @@ onload = () => {
             simulation.nodes(fNodes)
                 .force('charge', d3.forceManyBody().strength(-300))
                 .force('link', d3.forceLink(links)
-                    .distance(d => 150 + (20 * Math.random()) + 50 * (linkCount[d.source.res == sourceRes ? d.target.res : d.source.res] || 1))
+                    .distance(d => 150 + (20 * Math.random()) + 50 * (linkCount[d.source.res == sourceRes ? d.target.id : d.source.id] || 1))
                     .strength(0.01))
                 .force('box', boundedBox().bounds([0, 0], [width, height]).size(d => [d.width, d.height]))
-                //.force('x', d3.forceX(width / 2))
-                //.force('y', d3.forceY(height / 2));
-                .force('radial', d3.forceRadial(d => Math.min(width, height) / (5 - 2 * ((linkCount[d.res] || 1) - 1)), width / 2, height / 2))
+                .force('radial', d3.forceRadial(d => Math.min(width, height) / (5 - 2 * ((linkCount[d.id] || 1) - 1)),
+                    width / 2, height / 2));
 
             simulation.on("tick", function () {
                 node.each(function(d) {
@@ -659,7 +669,6 @@ onload = () => {
                 nodes = [sourceNode];
                 links = [];
                 const seen = { sourceRes: 0 };
-                const linkCount = {};
 
                 const addItem = (item) => {
                     let node = seen[item.resource.value];
@@ -669,6 +678,7 @@ onload = () => {
                             label: item.label.value,
                             type: item.type.value,
                             typeLabel: item.typeLabel?.value ?? item.type.value.replace(/^.*[#/]/, ''),
+                            id: item.resource.value,
                         };
                         node.index = nodes.push(node) - 1;
                         seen[item.resource.value] = node;
@@ -677,8 +687,8 @@ onload = () => {
                 };
 
                 const addLink = (item, highCardinality) => {
-                    if (ignoredLinks.includes(item.prop.value) || highCardinality
-                            || item.resource.value === sourceRes) {
+                    if (ignoredLinks.includes(item.prop.value)
+                            || item?.resource?.value === sourceRes) {
                         return;
                     }
                     const outgoing = item.outgoing.value !== 'false';
@@ -706,7 +716,6 @@ onload = () => {
                         outgoing,
                     });
                     links[links.length - 1].index = links.length - 1;
-                    linkCount[node.res] = (linkCount[node.res] ?? 0) + 1
                 };
 
                 data.links.forEach(i => addLink(i, false));

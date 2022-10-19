@@ -772,10 +772,13 @@ def neighbors():
     q = """
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
         SELECT ?resource ?outgoing (min(?ttype) as ?type)
             (min(?ttypeLabel) as ?typeLabel)
-            (min(?tlabel) as ?label)  (min(?tprop) as ?prop)
+            (min(?tlabel) as ?label)
+            (min(?tprop) as ?prop)
             (min(?tpropLabel) as ?propLabel) 
+            (min(?tpropDesc) as ?propDesc) 
         WHERE {
           { 
             { 
@@ -791,7 +794,8 @@ def neighbors():
           ?resource a ?ttype ;
             rdfs:label|skos:prefLabel ?tlabel .
           FILTER(ISIRI(?resource))
-          OPTIONAL { ?tprop rdfs:label ?tpropLabel } 
+          OPTIONAL { ?tprop rdfs:label ?tpropLabel }
+          OPTIONAL { ?tprop skos:definition|dcterms:description|rdfs:comment ?tpropDesc }  
           OPTIONAL { ?ttype rdfs:label ?ttypeLabel } 
         }
         GROUP BY ?resource ?outgoing
@@ -799,25 +803,29 @@ def neighbors():
     hcq = """
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        SELECT ?prop ?outgoing (min(?tpropLabel) as ?propLabel) (count(distinct ?resource) as ?count) 
+        PREFIX dcterms: <http://purl.org/dc/terms/>
+        SELECT ?prop ?outgoing ?count
+            (min(?tpropLabel) as ?propLabel)
+            (min(?tpropDesc) as ?propDesc)
         WHERE {
           {
             { 
-              { SELECT ?prop WHERE { __S__ ?prop ?o } GROUP BY ?prop HAVING (count(distinct ?o) >= 5) }
-              __S__ ?prop ?resource . BIND (true as ?outgoing)
+              { SELECT ?prop (count(distinct ?o) as ?count) WHERE { __S__ ?prop ?o } GROUP BY ?prop HAVING (count(distinct ?o) >= 5) }
+              BIND (true as ?outgoing)
             }
             UNION
             {
-              { SELECT ?prop WHERE { ?s ?prop __S__ } GROUP BY ?prop HAVING (count(distinct ?s) >= 5) }
-              ?resource ?prop __S__ . BIND (false as ?outgoing)
+              { SELECT ?prop (count(distinct ?s) as ?count) WHERE { ?s ?prop __S__ } GROUP BY ?prop HAVING (count(distinct ?s) >= 5) }
+              BIND (false as ?outgoing)
             }
           }
           ?resource a ?type ;
             rdfs:label|skos:prefLabel ?label .
           FILTER(ISIRI(?resource))
-          OPTIONAL { ?prop rdfs:label ?tpropLabel } 
+          OPTIONAL { ?prop rdfs:label ?tpropLabel }
+          OPTIONAL { ?prop skos:definition|dcterms:description|rdfs:comment ?tpropDesc } 
         }
-        GROUP BY ?prop ?outgoing
+        GROUP BY ?prop ?outgoing ?count
     """
     return {
         'links': u.sparql_query(q.replace('__S__', res)),
