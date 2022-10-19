@@ -2,6 +2,14 @@
     clear: both;
 }
 
+.neighbors-graph .svg-wrapper {
+    position: relative;
+}
+
+.neighbors-graph .high-cardinality-modal {
+    display: none;
+}
+
 .neighbors-graph .legend {
     display: flex;
     justify-content: center;
@@ -45,4 +53,36 @@
 
 .neighbors-graph .tab.active {
     border-bottom-color: #337ab7;
+}
+
+.neighbors-graph .neighbor-tooltip {
+    opacity: 0;
+    background-color: white;
+    border-radius: 5px;
+    padding: 5px;
+    position: absolute;
+    z-index: 999;
+    border: 2px solid #ddd;
+    transition: opacity 0.2s;
+    max-width: 20em;
+    font-size: 12px;
+}
+
+.neighbors-graph .neighbor-tooltip.visible {
+    opacity: 1;
+}
+
+.neighbors-graph .neighbor-tooltip .tooltip-title {
+    font-weight: bold;
+}
+
+.neighbors-graph .neighbor-tooltip .tooltip-class {
+    font-size: 10px;
+    margin-bottom: 0;
+}
+
+.neighbors-graph .neighbor-tooltip .tooltip-class-uri {
+    display: inline-block;
+    margin-top: 0;
+    font-size: 9px;
 }

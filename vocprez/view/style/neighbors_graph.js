@@ -36,6 +36,12 @@ onload = () => {
     const height = 600;
     const padding = 10, margin = 10;
 
+    const escapeHtml = (s) => s ? s.replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;') : '';
+
     function boundedBox() {
         let nodes, sizes, bounds;
         let size = () => [0, 0];
@@ -270,12 +276,15 @@ onload = () => {
                 update(d.filters);
             });
 
-        const svg = wrapper.append("svg")
+        const svg = wrapper.select('.svg-wrapper').append("svg")
             .attr("width", width)
             .attr("height", height);
 
         const legend = wrapper.append("div")
             .attr('class', 'legend');
+
+        const tooltip = wrapper.select('.svg-wrapper').append("div")
+            .attr('class', 'neighbor-tooltip');
 
         svg.append("defs").append("marker")
               .attr("id", d => `arrow-outgoing`)
@@ -348,6 +357,79 @@ onload = () => {
                 }
             });
 
+        let tooltipNode = null;
+        const updateTooltip = (html, node) => {
+            if (html === false) {
+                tooltipNode = null;
+            } else if (node) {
+                tooltipNode = node;
+            }
+            if (tooltipNode) {
+                if (html && html != tooltip.text()) {
+                    tooltip.html(html);
+                }
+                const bbox = tooltipNode.getBBox(),
+                    xCenter2 = bbox.x + bbox.x + bbox.width,
+                    yCenter2 = bbox.y + bbox.y + bbox.height,
+                    margin = 5,
+                    ttheight = tooltip.node().offsetHeight + margin,
+                    ttwidth = tooltip.node().offsetWidth + margin;
+
+                let top = null,
+                    left = null;
+
+                let yAligned = false;
+                if (yCenter2 >= height) { // closer to bottom
+                    if (bbox.y + bbox.height + ttheight < height) {
+                        yAligned = true;
+                        top = bbox.y + bbox.height;
+                    } else {
+                        top = height - ttheight;
+                    }
+                } else if (ttheight < bbox.y) {
+                    yAligned = true;
+                    top = bbox.y - ttheight;
+                } else {
+                    top = 0;
+                }
+
+                if (xCenter2 >= width) { // closer to right
+                    if (yAligned) { // right-aligned
+                        left = bbox.x + bbox.width - ttwidth;
+                    } else if (bbox.x + bbox.width + ttwidth < width) {
+                        left = bbox.x + bbox.width;
+                    } else {
+                        left = bbox.x - ttwidth;
+                    }
+                } else if (yAligned) {
+                    left = bbox.x;
+                } else if (ttwidth < bbox.x) {
+                    left = bbox.x - ttwidth;
+                } else {
+                    left = bbox.x + bbox.width;
+                }
+
+                tooltip.classed('visible', true)
+                    .style('top', top === null ? null : `${top}px`)
+                    .style('left', left === null ? null : `${left}px`);
+            } else {
+                tooltip.classed('visible', false)
+            }
+        };
+
+        const addLinkTooltipEvents = x =>
+            x.on('mouseover', (ev, d) => {
+                let html = `<div class="tooltip-title">${escapeHtml(d.label)}</div>
+                              <div class="tooltip-uri">${escapeHtml(d.prop)}</div>`;
+                if (d.desc) {
+                    html += `<p className="tooltip-desc">${escapeHtml(d.desc)}</p>`;
+                }
+                updateTooltip(html, ev.target);
+            })
+            .on('mouseout', (ev, d) => {
+                updateTooltip(false);
+            });
+
         const update = function(filters) {
 
             const legendClasses = [...new Map(nodes.filter(d => d.type).map(d => [d.type, d])).values()];
@@ -392,7 +474,8 @@ onload = () => {
             const link = svg.selectAll(".link")
                 .data(fLinks, d => d.id)
                 .join(
-                    enter => enter.append("path"),
+                    enter => enter.append("path")
+                        .call(addLinkTooltipEvents),
                     u => u,
                     exit => exit.remove())
                         .attr("class", "link")
@@ -400,7 +483,7 @@ onload = () => {
                         .attr("stroke", d => d.outgoing ? outgoingColor : incomingColor)
                         .attr("stroke-width", "1.5px")
                         .attr("stroke-opacity", "1")
-                        .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`) ;
+                        .attr("marker-end", d => `url(${new URL(`#arrow-${d.outgoing ? 'outgoing' : 'incoming'}`, location)})`);
 
             const linkLabelPath = svg.selectAll('.link-label-path')
                 .data(fLinks, d => d.id)
@@ -422,7 +505,8 @@ onload = () => {
                         t.append('textPath')
                             .attr('startOffset', '50%')
                             .attr('xlink:href', d => `#link-label-path-${toId(d.id)}`)
-                            .text(d => d.label);
+                            .text(d => d.label)
+                            .call(addLinkTooltipEvents);
                         return t;
                     },
                     u => u,
@@ -462,10 +546,17 @@ onload = () => {
                                 node.style('opacity', function(n) {
                                     return [d.res, sourceRes].includes(n.res) ? (d3.select(this).raise(), 1) : 0.4;
                                 });
+                                updateTooltip(
+                                    `<div class="tooltip-title">${escapeHtml(d.label)}</div>
+                                        <div class="tooltip-uri">${escapeHtml(d.res)}</div>
+                                        <div class="tooltip-class">Class: ${escapeHtml(d.typeLabel)}
+                                            <div class="tooltip-class-uri">${escapeHtml(d.type)}</div>
+                                        </div>`, ev.target);
                             })
                             .on('mouseout', (ev, d) => {
                                 [node, link, linkLabel].forEach(x => x.style('opacity', 1));
                                 node.raise();
+                                updateTooltip(false);
                             })
                             .call(drag)
                             .append("title")
@@ -521,7 +612,8 @@ onload = () => {
                         };
                         d.innerBounds.X = d.innerBounds.x + d.innerBounds.width;
                         d.innerBounds.Y = d.innerBounds.y + d.innerBounds.height;
-                    })
+                    });
+
                 node.selectAll('rect').attr("x", d => d.innerBounds.x)
                     .attr("y", d => d.innerBounds.y)
                     .attr("width", d => d.innerBounds.width)
@@ -550,6 +642,8 @@ onload = () => {
                          var h = this.getBBox().height;
                          return d.innerBounds.y + d.innerBounds.height / 2 - h / 2 + padding;
                      });
+
+                updateTooltip();
             });
         };
 
@@ -599,6 +693,7 @@ onload = () => {
                         source: outgoing ? sourceNode : node,
                         target: outgoing ? node : sourceNode,
                         prop: item.prop.value,
+                        desc: item.propDesc?.value || null,
                         label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
                         id,
                         outgoing,
