@@ -122,7 +122,7 @@ onload = () => {
             ry = -ry;
         }
         if (rx == 0.0 || ry == 0.0) { // invalid arguments
-            throw Error('rx and ry can not be 0');
+            return { cx: x1, cy: y1 };
         }
 
         var s_phi = Math.sin(phi);
@@ -680,7 +680,8 @@ onload = () => {
                 };
 
                 const addLink = (item, highCardinality) => {
-                    if (ignoredLinks.includes(item.prop.value)) {
+                    if (ignoredLinks.includes(item.prop.value) || highCardinality
+                            || item.resource.value === sourceRes) {
                         return;
                     }
                     const outgoing = item.outgoing.value !== 'false';
