@@ -351,10 +351,7 @@ onload = () => {
                 d.fy = Math.max(Math.min((dragParams.pos[1] = ev.y) - dragParams.offset[1], height - d.height), 0);
             })
             .on('end', (ev, d) => {
-                if (dragParams) {
-                    d.fx = null;
-                    d.fy = null;
-                }
+                dragParams = null;
             });
 
         let tooltipNode = null;
