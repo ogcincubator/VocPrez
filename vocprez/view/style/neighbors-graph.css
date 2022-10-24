@@ -66,6 +66,8 @@
     transition: opacity 0.2s;
     max-width: 20em;
     font-size: 12px;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 .neighbors-graph .neighbor-tooltip.visible {
