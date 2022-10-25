@@ -1,3 +1,4 @@
+import math
 import sys
 
 import io
@@ -889,6 +890,7 @@ def neighbors_objects():
             'start': offset,
             'end': offset + pageSize,
             'pageSize': pageSize,
+            'pages': math.ceil(total / pageSize),
         },
         'items': u.sparql_query(q.replace('__ST__', st).replace('__PAG__', paging)),
     }

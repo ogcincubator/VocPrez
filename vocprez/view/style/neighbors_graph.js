@@ -460,7 +460,47 @@ onload = () => {
 
                                 return li;
                             }
-                        )
+                        );
+
+                    const p = data.pagination;
+                    let pages = [{ label: '1', page: 1}];
+                    if (p.pages > 7 && p.page > 4) {
+                        pages.push(null);
+                    }
+                    if (p.pages > 2) {
+                        const f = Math.max(Math.min(p.page - 2, Math.min(p.page + 2, p.pages - 1) - 5), 2),
+                            t = Math.min(Math.max(p.page + 2, Math.max(p.page - 2, 2) + 5), p.pages - 1);
+                        for (let i = f; i <= t; i++) {
+                            pages.push({ label: i, page: i });
+                        }
+                    }
+                    if (p.pages > 7 && p.pages - p.page > 5) {
+                        pages.push(null);
+                    }
+                    if (p.pages > 1) {
+                        pages.push({ label: p.pages, page: p.pages });
+                    }
+                    const pwrapper = hcModal.select('.pagination').html(null);
+                    for (const link of pages) {
+                        if (link) {
+                            pwrapper.append('a')
+                                .datum(link)
+                                .attr('class', 'page-item page-link')
+                                .attr('href', '#')
+                                .text(link.label);
+                        } else {
+                            pwrapper.append('span')
+                                .attr('class', 'page-item page-separator')
+                                .text('...');
+                        }
+                    }
+                    pwrapper.selectAll('a')
+                        .on('click', function(ev, d) {
+                            ev.preventDefault();
+                            if (d && d.page !== p.page) {
+                                updateHCModal(prop, propLabel, outgoing, d.page);
+                            }
+                        })
                 })
                 .finally(() => {
                     hcModal.classed('loading', false);

@@ -63,7 +63,7 @@
 
 .neighbors-graph .high-cardinality-modal .items {
     overflow-y: scroll;
-    flex: 1;
+    flex: 0 auto;
     display: flex;
     flex-wrap: wrap;
     align-items: stretch;
@@ -72,7 +72,7 @@
 
 .neighbors-graph .high-cardinality-modal .items .item {
     box-sizing: border-box;
-    flex: 50%;
+    flex: 0 50%;
     padding: 4px;
     display: flex;
     align-items: stretch;
@@ -91,6 +91,31 @@
 
 .neighbors-graph .high-cardinality-modal .items .item-class-value {
     margin-left: 0.3em;
+}
+
+.neighbors-graph .high-cardinality-modal .pagination {
+    display: flex;
+    justify-content: center;
+    padding: 0;
+    margin: 0.6em 0;
+}
+
+.neighbors-graph .high-cardinality-modal .pagination .page-link {
+    font-weight: bold;
+    padding: 0.2em;
+    min-width: 1.5em;
+    text-align: center;
+    display: block;
+}
+
+.neighbors-graph .high-cardinality-modal .pagination .page-link:hover {
+    text-decoration: none;
+    background: #e0e0e0;
+}
+
+.neighbors-graph .high-cardinality-modal .pagination .current .page-link,
+.neighbors-graph .high-cardinality-modal .pagination .current .page-link:hover{
+    background: #f0f0f0;
 }
 
 .neighbors-graph .legend {
