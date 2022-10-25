@@ -805,28 +805,32 @@ def neighbors():
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         PREFIX dcterms: <http://purl.org/dc/terms/>
-        SELECT ?prop ?outgoing ?count
-            (min(?tpropLabel) as ?propLabel)
-            (min(?tpropDesc) as ?propDesc)
+        SELECT ?prop ?outgoing ?count ?propLabel ?propDesc
         WHERE {
           {
             { 
-              { SELECT ?prop (count(distinct ?o) as ?count) WHERE { __S__ ?prop ?o } GROUP BY ?prop HAVING (count(distinct ?o) >= 5) }
+              { SELECT ?prop (min(?tpropLabel) as ?propLabel) (min(?tpropDesc) as ?propDesc) (count(distinct ?o) as ?count) WHERE {
+                __S__ ?prop ?o
+                OPTIONAL { ?prop rdfs:label ?tpropLabel }
+                OPTIONAL { ?prop skos:definition|dcterms:description|rdfs:comment ?tpropDesc }
+              } GROUP BY ?prop HAVING (count(distinct ?o) >= 5) }
               BIND (true as ?outgoing)
             }
             UNION
             {
-              { SELECT ?prop (count(distinct ?s) as ?count) WHERE { ?s ?prop __S__ } GROUP BY ?prop HAVING (count(distinct ?s) >= 5) }
+              { SELECT ?prop (min(?tpropLabel) as ?propLabel) (min(?tpropDesc) as ?propDesc) (count(distinct ?s) as ?count) WHERE { 
+                ?s ?prop __S__
+                OPTIONAL { ?prop rdfs:label ?tpropLabel }
+                OPTIONAL { ?prop skos:definition|dcterms:description|rdfs:comment ?tpropDesc } 
+              } GROUP BY ?prop HAVING (count(distinct ?s) >= 5) }
               BIND (false as ?outgoing)
             }
           }
           ?resource a ?type ;
             rdfs:label|skos:prefLabel ?label .
-          FILTER(ISIRI(?resource))
-          OPTIONAL { ?prop rdfs:label ?tpropLabel }
-          OPTIONAL { ?prop skos:definition|dcterms:description|rdfs:comment ?tpropDesc } 
+          FILTER(ISIRI(?resource)) 
         }
-        GROUP BY ?prop ?outgoing ?count
+        GROUP BY ?prop ?propLabel ?propDesc ?outgoing ?count
     """
     return {
         'links': u.sparql_query(q.replace('__S__', res)),
