@@ -250,6 +250,12 @@ onload = () => {
         const width = wrapper.node().offsetWidth;
         var loadedData = null;
 
+        const [sourceRes, sourceLabel, sourceType] = [
+            wrapper.attr('data-res'),
+            wrapper.attr('data-label'),
+            wrapper.attr('type'),
+        ];
+
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
         const simulation = d3.forceSimulation()
@@ -310,20 +316,12 @@ onload = () => {
               .attr("fill", incomingColor)
               .attr("d", "M0,-5L10,0L0,5");
 
-        const hcModal = svg.select('.high-cardinality-modal');
-        var hcStatus = {
-            items: [],
-            total: 0,
-            start: 0,
-        };
+        const hcModal = wrapper.select('.high-cardinality-modal');
+        hcModal.select('.icon-single rect').attr('fill', color(sourceType));
+        hcModal.select('.close-modal').on('click', () => hcModal.classed('visible', false));
 
-        var nodes, links;
+        let nodes, links;
 
-        const [sourceRes, sourceLabel, sourceType] = [
-            wrapper.attr('data-res'),
-            wrapper.attr('data-label'),
-            wrapper.attr('type'),
-        ];
         params = new URLSearchParams({ res: sourceRes });
 
         let node;
@@ -414,10 +412,70 @@ onload = () => {
             }
         };
 
+        const updateHCModal = (prop, propLabel, outgoing, page = 1) => {
+            hcModal.classed('loading', true);
+            const p = new URLSearchParams({
+                res: sourceRes,
+                prop,
+                dir: outgoing ? 'outgoing' : 'incoming',
+                page,
+            });
+
+            const arrows = outgoing ? ['&#x23af;', '&#x2192;'] : ['&#x2190;', '&#x23af;'];
+            hcModal.select('.property .marker-start').html(arrows[0]);
+            hcModal.select('.property .marker-end').html(arrows[1]);
+            const propLink = hcModal.select('.property a')
+                .attr('href', prop)
+                .attr('target', '_blank');
+            propLink.select('.property-name')
+                .text(propLabel);
+            propLink.select('.property-uri')
+                .text(prop);
+
+            d3.json(`${baseUrl}/neighbors/items?${p.toString()}`)
+                .then(data => {
+                    hcModal.select('.items').selectAll('.item')
+                        .data(data.items, d => d.item.value)
+                        .join(
+                            enter => {
+                                const li = enter.append('li')
+                                    .attr('class', 'item');
+
+                                const wrapper = li.append('div')
+                                    .attr('class', 'item-wrapper');
+
+                                wrapper.append('a')
+                                    .attr('class', 'item-title')
+                                    .attr('href', d => `${baseUrl}/object?uri=${encodeURIComponent(d.item.value)}&_profile=skos`)
+                                    .text(d => d.label.value)
+
+                                wrapper.append('div')
+                                    .attr('class', 'item-class')
+                                    .text('Class:')
+                                    .append('a')
+                                    .attr('class', 'item-class-value')
+                                    .attr('href', d => d.type.value)
+                                    .attr('target', '_blank')
+                                    .text(d => d.typeLabel?.value ?? d.type.value);
+
+                                return li;
+                            }
+                        )
+                })
+                .finally(() => {
+                    hcModal.classed('loading', false);
+                });
+
+            hcModal.classed('visible', true);
+        };
+
         const update = function(filters) {
 
             const addLinkTooltipEvents = x =>
                 x.on('mouseover', (ev, d) => {
+                    if (dragParams) {
+                        return;
+                    }
                     [link, linkLabel].forEach(x =>
                         x.style('opacity', function(l) {
                             return l.id === d.id ? (d3.select(this).raise(), 1) : 0.1;
@@ -433,6 +491,9 @@ onload = () => {
                     updateTooltip(html, ev.target);
                 })
                 .on('mouseout', (ev, d) => {
+                    if (dragParams) {
+                        return;
+                    }
                     [node, link, linkLabel].forEach(x => x.style('opacity', 1));
                     node.raise();
                     updateTooltip(false);
@@ -541,10 +602,12 @@ onload = () => {
                             .on('click', (ev, d) => {
                                 if (d.res) {
                                     window.location = `${baseUrl}/object?uri=${encodeURIComponent(d.res)}&_profile=skos`;
+                                } else if (d.highCardinality) {
+                                    updateHCModal(d.prop, d.propLabel, d.outgoing);
                                 }
                             })
                             .on('mouseover', (ev, d) => {
-                                if (d.res === sourceRes) {
+                                if (d.res === sourceRes || dragParams) {
                                     return;
                                 }
                                 [link, linkLabel].forEach(x =>
@@ -571,6 +634,9 @@ onload = () => {
                                 }
                             })
                             .on('mouseout', (ev, d) => {
+                                if (dragParams) {
+                                    return;
+                                }
                                 [node, link, linkLabel].forEach(x => x.style('opacity', 1));
                                 node.raise();
                                 updateTooltip(false);
@@ -663,7 +729,7 @@ onload = () => {
             });
         };
 
-        d3.json(`${baseUrl}/neighbors?${params}`)
+        d3.json(`${baseUrl}/neighbors?${params.toString()}`)
             .then(data => {
                 const sourceNode = { res: sourceRes, label: sourceLabel, type: sourceType };
                 nodes = [sourceNode];
@@ -691,14 +757,17 @@ onload = () => {
                             || item?.resource?.value === sourceRes) {
                         return;
                     }
-                    const outgoing = item.outgoing.value !== 'false';
+                    const outgoing = item.outgoing.value !== 'false',
+                        propLabel = item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, '');
                     let node, id;
                     if (highCardinality) {
                         node = {
                             highCardinality: true,
                             prop: item.prop.value,
+                            propLabel,
                             count: item.count.value,
                             id: `${item.prop.value} hc`,
+                            outgoing,
                         };
                         node.index = nodes.push(node) - 1;
                         id = node.id;
@@ -711,7 +780,7 @@ onload = () => {
                         target: outgoing ? node : sourceNode,
                         prop: item.prop.value,
                         desc: item.propDesc?.value || null,
-                        label: item.propLabel?.value ?? item.prop.value.replace(/^.*[#/]/, ''),
+                        label: propLabel,
                         id,
                         outgoing,
                     });

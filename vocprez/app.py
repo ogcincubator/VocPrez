@@ -763,9 +763,10 @@ def cache_reload():
     )
 # END ROUTE cache_reload
 
+
 @app.route("/neighbors")
 def neighbors():
-    res = request.args.get('res')
+    res = request.args.get('res', '')
     if not u.is_url(res):
         return Response("Invalid URI for res", status=400)
     res = f'<{res}>'
@@ -830,6 +831,62 @@ def neighbors():
     return {
         'links': u.sparql_query(q.replace('__S__', res)),
         'highCardinality': u.sparql_query(hcq.replace('__S__', res)),
+    }
+
+
+@app.route("/neighbors/items")
+def neighbors_objects():
+    res = request.args.get('res', '')
+    prop = request.args.get('prop', '')
+    if not u.is_url(res):
+        return Response("Invalid URI for res", status=400)
+    if not u.is_url(prop):
+        return Response("Invalid URI for prop", status=400)
+
+    outgoing = request.args.get('dir') != 'incoming'
+    if outgoing:
+        st = f'<{res}> <{prop}> ?item'
+    else:
+        st = f'?item <{prop}> <{res}>'
+
+    page = int(request.args.get('page', 1))
+    pageSize = int(request.args.get('pageSize', 30))
+    offset = (page - 1) * pageSize
+    paging = f'OFFSET {offset} LIMIT {pageSize}'
+
+    countq = """
+        SELECT (count(distinct ?item) as ?count)
+        WHERE { __ST__ }
+    """
+    total = int(u.sparql_query(countq.replace('__ST__', st))[0]['count']['value'])
+
+    q = """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
+        SELECT ?item (min(?ttype) as ?type)
+            (min(?ttypeLabel) as ?typeLabel)
+            (min(?tlabel) as ?label) 
+        WHERE {
+          __ST__ .
+          ?item a ?ttype ;
+            rdfs:label|skos:prefLabel ?tlabel .
+          FILTER(ISIRI(?item))  
+          OPTIONAL { ?ttype rdfs:label ?ttypeLabel } 
+        }
+        GROUP BY ?item
+        ORDER BY ?label STR(?item)
+        __PAG__
+    """
+    return {
+        'pagination': {
+            'total': total,
+            'page': page,
+            'start': offset,
+            'end': offset + pageSize,
+            'pageSize': pageSize,
+        },
+        'items': u.sparql_query(q.replace('__ST__', st).replace('__PAG__', paging)),
     }
 
 

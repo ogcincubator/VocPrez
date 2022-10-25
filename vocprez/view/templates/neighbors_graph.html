@@ -1,15 +1,28 @@
 <div class="neighbors-graph" data-res="{{ uri }}" data-label="{{ (label if label else uri)|e }}">
-  <div class="high-cardinality-modal hidden">
-    <div class="title-bar">
-      <div class="property">
-        <a href="#"></a>
-      </div>
-      <span class="close-modal">&times;</span>
+    <div class="high-cardinality-modal">
+        <div class="title-bar">
+            <div class="property">
+                <svg class="icon-single" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 16 16" width="22" height="22">
+                    <rect x="2" y="5" width="12" height="6" rx="2" ry="2" fill="#222"></rect>
+                </svg>
+                <span class="marker-start"></span>
+                <a href="#">
+                    <span class="property-name"></span>
+                    <small class="property-uri"></small>
+                </a>
+                <span class="marker-end"></span>
+                <svg class="icon-multiple" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 16 16" width="22" height="22">
+                    <rect x="2" y="2" width="6" height="4" rx="1" ry="1" fill="#fdcdac"></rect>
+                    <rect x="10" y="5" width="6" height="4" rx="1" ry="1" fill="#f4cae4"></rect>
+                    <rect x="4" y="9" width="6" height="4" rx="1" ry="1" fill="#cbd5e8"></rect>
+                </svg>
+            </div>
+            <span class="close-modal">&times;</span>
+        </div>
+        <ul class="items">
+        </ul>
+        <div class="pagination"></div>
     </div>
-    <ul class="objects">
-    </ul>
-    <div class="pagination"></div>
-  </div>
-  <div class="svg-wrapper">
-  </div>
+    <div class="svg-wrapper">
+    </div>
 </div>
