@@ -260,7 +260,9 @@ onload = () => {
         const color = d3.scaleOrdinal(d3.schemePastel2);
 
         const simulation = d3.forceSimulation()
-            .alphaTarget(0.3);
+            .alpha(0.5)
+            .alphaTarget(0.1)
+            .stop();
 
         if (showTabs) {
             const tabs = wrapper.insert('div', ':first-child')
@@ -329,9 +331,12 @@ onload = () => {
 
         let node;
 
-        let dragParams = {};
+        let dragParams = null;
         const drag = d3.drag()
             .on('start', (ev, d) => {
+                if (!ev.active) {
+                    simulation.alpha(0.5).alphaTarget(0.1).restart();
+                }
                 node.filter(n => n.res === d.res).raise();
                 if (d.res === sourceRes) {
                     dragParams = null;
@@ -352,6 +357,9 @@ onload = () => {
                 d.fy = Math.max(Math.min((dragParams.pos[1] = ev.y) - dragParams.offset[1], height - d.height), 0);
             })
             .on('end', (ev, d) => {
+                if (!ev.active) {
+                    simulation.alphaTarget(0.0001);
+                }
                 dragParams = null;
             });
 
@@ -560,7 +568,7 @@ onload = () => {
                     }
                 );
 
-            var fNodes = nodes, fLinks = links;
+            let fNodes = nodes, fLinks = links;
 
             if (filters) {
                 if (filters.res) {
@@ -582,6 +590,50 @@ onload = () => {
                 const n = l.source.res == sourceRes ? l.target : l.source;
                 linkCount[n.id] = (linkCount[n.id] || 0) + 1;
             });
+
+            const ticked = function() {
+                node.each(function(d) {
+                        d.innerBounds = {
+                            x: d.x + margin / 2,
+                            y: d.y + margin / 2,
+                            width: d.width - margin,
+                            height: d.height - margin,
+                        };
+                        d.innerBounds.X = d.innerBounds.x + d.innerBounds.width;
+                        d.innerBounds.Y = d.innerBounds.y + d.innerBounds.height;
+                    });
+
+                node.selectAll('rect').attr("x", d => d.innerBounds.x)
+                    .attr("y", d => d.innerBounds.y)
+                    .attr("width", d => d.innerBounds.width)
+                    .attr("height", d => d.innerBounds.height);
+
+                link.attr("d", linkArc);
+
+                linkLabelPath.attr("d", d => {
+                    let { start, end, r, cx, cy } = d.arc;
+                    let sweep = 0, offset = 5;
+                    if (start.x > end.x) {
+                        [start, end] = [end, start];
+                        sweep = 1;
+                        offset = 10;
+                    }
+                    const aStart = Math.atan2(start.y - cy, start.x - cx),
+                        aEnd = Math.atan2(end.y - cy, end.x - cx);
+                    return `
+                        M${start.x - Math.cos(aStart) * offset},${start.y - Math.sin(aStart) * offset}
+                        A${r},${r} 0 0,${sweep} ${end.x - Math.cos(aEnd) * offset},${end.y - Math.sin(aEnd) * offset}
+                    `;
+                });
+
+                node.selectAll('.label').attr("x", function (d) { return d.innerBounds.x + padding })
+                     .attr("y", function (d) {
+                         var h = this.getBBox().height;
+                         return d.innerBounds.y + d.innerBounds.height / 2 - h / 2 + padding;
+                     });
+
+                updateTooltip();
+            };
 
             const link = svg.selectAll(".link")
                 .data(fLinks, d => d.id)
@@ -704,7 +756,7 @@ onload = () => {
                                 var bb = this.getBBox();
                                 d.width = bb.width + 2 * padding + margin;
                                 d.height = bb.height + 2 * padding + margin;
-                                if (d.res == sourceRes) {
+                                if (d.res === sourceRes) {
                                     d.fx = (width - d.width) / 2;
                                     d.fy = (height - d.height) / 2;
                                 }
@@ -727,49 +779,13 @@ onload = () => {
                 .force('radial', d3.forceRadial(d => Math.min(width, height) / (5 - 2 * ((linkCount[d.id] || 1) - 1)),
                     width / 2, height / 2));
 
-            simulation.on("tick", function () {
-                node.each(function(d) {
-                        d.innerBounds = {
-                            x: d.x + margin / 2,
-                            y: d.y + margin / 2,
-                            width: d.width - margin,
-                            height: d.height - margin,
-                        };
-                        d.innerBounds.X = d.innerBounds.x + d.innerBounds.width;
-                        d.innerBounds.Y = d.innerBounds.y + d.innerBounds.height;
-                    });
+            ticked();
+            for (let i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())); i < n; i++) {
+                simulation.tick();
+            }
 
-                node.selectAll('rect').attr("x", d => d.innerBounds.x)
-                    .attr("y", d => d.innerBounds.y)
-                    .attr("width", d => d.innerBounds.width)
-                    .attr("height", d => d.innerBounds.height);
-
-                link.attr("d", linkArc);
-
-                linkLabelPath.attr("d", d => {
-                    let { start, end, r, cx, cy } = d.arc;
-                    let sweep = 0, offset = 5;
-                    if (start.x > end.x) {
-                        [start, end] = [end, start];
-                        sweep = 1;
-                        offset = 10;
-                    }
-                    const aStart = Math.atan2(start.y - cy, start.x - cx),
-                        aEnd = Math.atan2(end.y - cy, end.x - cx);
-                    return `
-                        M${start.x - Math.cos(aStart) * offset},${start.y - Math.sin(aStart) * offset}
-                        A${r},${r} 0 0,${sweep} ${end.x - Math.cos(aEnd) * offset},${end.y - Math.sin(aEnd) * offset}
-                    `;
-                });
-
-                node.selectAll('.label').attr("x", function (d) { return d.innerBounds.x + padding })
-                     .attr("y", function (d) {
-                         var h = this.getBBox().height;
-                         return d.innerBounds.y + d.innerBounds.height / 2 - h / 2 + padding;
-                     });
-
-                updateTooltip();
-            });
+            simulation.on("tick", ticked);
+            ticked();
         };
 
         d3.json(`${baseUrl}/neighbors?${params.toString()}`)
