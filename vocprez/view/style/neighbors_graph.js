@@ -1,4 +1,5 @@
 onload = () => {
+    const showTabs = false;
     const tabFilters = [
         {
             label: 'All links',
@@ -261,26 +262,28 @@ onload = () => {
         const simulation = d3.forceSimulation()
             .alphaTarget(0.3);
 
-        const tabs = wrapper.insert('div', ':first-child')
-            .attr('class', 'tabs')
-            .selectAll('.tab')
-            .data(tabFilters)
-            .join(enter => enter.append('a')
-                .attr('href', '#')
-                .attr('class', 'tab')
-                .classed('active', (d, i) => !i)
-                .text(d => d.label)
-            )
-            .on('click', function(ev, d) {
-                ev.preventDefault();
-                const $this = d3.select(this);
-                if ($this.classed('active')) {
-                    return;
-                }
-                tabs.classed('active', false);
-                $this.classed('active', true);
-                update(d.filters);
-            });
+        if (showTabs) {
+            const tabs = wrapper.insert('div', ':first-child')
+                .attr('class', 'tabs')
+                .selectAll('.tab')
+                .data(tabFilters)
+                .join(enter => enter.append('a')
+                    .attr('href', '#')
+                    .attr('class', 'tab')
+                    .classed('active', (d, i) => !i)
+                    .text(d => d.label)
+                )
+                .on('click', function(ev, d) {
+                    ev.preventDefault();
+                    const $this = d3.select(this);
+                    if ($this.classed('active')) {
+                        return;
+                    }
+                    tabs.classed('active', false);
+                    $this.classed('active', true);
+                    update(d.filters);
+                });
+        }
 
         const svg = wrapper.select('.svg-wrapper').append("svg")
             .attr("width", width)
@@ -829,7 +832,7 @@ onload = () => {
 
                 data.links.forEach(i => addLink(i, false));
                 data.highCardinality.forEach(i => addLink(i, true));
-                update(tabFilters[0]?.filter);
+                update(showTabs && tabFilters[0]?.filter);
             });
     });
 };
