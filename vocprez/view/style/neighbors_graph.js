@@ -1,34 +1,4 @@
 onload = () => {
-    const showTabs = false;
-    const tabFilters = [
-        {
-            label: 'All links',
-        },
-        {
-            label: 'Provenance',
-            filters: {
-                prop: p => p.startsWith('http://www.w3.org/ns/prov#'),
-            },
-        },
-        {
-            label: 'OGC Metamodel',
-            filters: {
-                prop: p => p.startsWith('http://www.opengis.net/def/metamodel/'),
-            },
-        },
-        {
-            label: 'OGC Spec',
-            filters: {
-                prop: p => p.startsWith('http://www.opengis.net/def/ont/specrel/'),
-            }
-        },
-        {
-            label: 'SKOS',
-            filters: {
-                prop: p => p.startsWith('http://www.w3.org/2004/02/skos/core#'),
-            },
-        },
-    ];
     const ignoredLinks = [
         'http://www.opengis.net/def/metamodel/ogc-na/status',
     ];
@@ -264,29 +234,6 @@ onload = () => {
             .alphaTarget(0.1)
             .stop();
 
-        if (showTabs) {
-            const tabs = wrapper.insert('div', ':first-child')
-                .attr('class', 'tabs')
-                .selectAll('.tab')
-                .data(tabFilters)
-                .join(enter => enter.append('a')
-                    .attr('href', '#')
-                    .attr('class', 'tab')
-                    .classed('active', (d, i) => !i)
-                    .text(d => d.label)
-                )
-                .on('click', function(ev, d) {
-                    ev.preventDefault();
-                    const $this = d3.select(this);
-                    if ($this.classed('active')) {
-                        return;
-                    }
-                    tabs.classed('active', false);
-                    $this.classed('active', true);
-                    update(d.filters);
-                });
-        }
-
         const svg = wrapper.select('.svg-wrapper').append("svg")
             .attr("width", width)
             .attr("height", height);
@@ -520,7 +467,64 @@ onload = () => {
             hcModal.classed('visible', true);
         };
 
-        const update = function(filters) {
+        const filterFunctions = {
+            'regex': (s, v) => !!s.match(new RegExp(v)),
+            'prefix': (s, v) => s.startsWith(v),
+        };
+
+        const applyFilters = (nodes, links, filters) => {
+
+            let fNodes = nodes, fLinks = links;
+
+            if (filters) {
+                if (!Array.isArray(filters)) {
+                    filters = [filters];
+                }
+                for (const flt of filters) {
+                    for (const [funcName, ffunc] of Object.entries(filterFunctions)) {
+                        const fval = flt[funcName];
+                        if (!fval) {
+                            continue;
+                        }
+                        if (flt['@type'] === 'ResourceURIFilter') {
+                            fNodes = fNodes.filter(n => n.res == sourceRes || ffunc(n.res, fval));
+                            fLinks = fLinks.filter(l => ffunc(fNodes[l.source].res, fval)
+                                || ffunc(fNodes[l.target].res, fval));
+                        } else if (flt['@type'] === 'PropertyFilter') {
+                            fLinks = fLinks.filter(l => ffunc(l.prop, fval));
+                            let filteredNodes = fLinks.map(l => l.source.res == sourceRes ? l.target.res : l.source.res);
+                            fNodes = fNodes.filter(n => n.highCardinality
+                                ? ffunc(n.prop, fval)
+                                : n.res == sourceRes || filteredNodes.includes(n.res));
+                        } else {
+                            console.log(`Unknown filter type ${flt['@type']}, ignoring`)
+                        }
+                    }
+                }
+            }
+
+            return { fNodes, fLinks };
+        }
+
+        const update = function(fNodes = nodes, fLinks = links) {
+
+            const legendClasses = [...new Map(nodes.filter(d => d.type).map(d => [d.type, d])).values()];
+            legend.selectAll('.legend-entry')
+                .data(legendClasses)
+                .join(
+                    enter => {
+                        const e = enter.append('div')
+                            .attr('class', 'legend-entry')
+                            .attr('title', d => d.type);
+                        e.append('span')
+                            .attr('class', 'legend-entry-marker')
+                            .style('background-color', d => color(d.type));
+                        e.append('span')
+                            .attr('class', 'legend-entry-label')
+                            .text(d => d.typeLabel);
+                        return e;
+                    }
+                );
 
             const addLinkTooltipEvents = x =>
                 x.on('mouseover', (ev, d) => {
@@ -549,41 +553,6 @@ onload = () => {
                     node.raise();
                     updateTooltip(false);
                 });
-
-            const legendClasses = [...new Map(nodes.filter(d => d.type).map(d => [d.type, d])).values()];
-            legend.selectAll('.legend-entry')
-                .data(legendClasses)
-                .join(
-                    enter => {
-                        const e = enter.append('div')
-                            .attr('class', 'legend-entry')
-                            .attr('title', d => d.type);
-                        e.append('span')
-                            .attr('class', 'legend-entry-marker')
-                            .style('background-color', d => color(d.type));
-                        e.append('span')
-                            .attr('class', 'legend-entry-label')
-                            .text(d => d.typeLabel);
-                        return e;
-                    }
-                );
-
-            let fNodes = nodes, fLinks = links;
-
-            if (filters) {
-                if (filters.res) {
-                    fNodes = fNodes.filter(n => n.res == sourceRes || filters.res(n.res));
-                    fLinks = fLinks.filter(l => filters.res(fNodes[l.source].res)
-                        || filters.res(fNodes[l.target].res));
-                }
-                if (filters.prop) {
-                    fLinks = fLinks.filter(l => filters.prop(l.prop));
-                    let filteredNodes = fLinks.map(l => l.source.res == sourceRes ? l.target.res : l.source.res);
-                    fNodes = fNodes.filter(n => n.highCardinality
-                        ? filters.prop(n.prop)
-                        : n.res == sourceRes || filteredNodes.includes(n.res));
-                }
-            }
 
             const linkCount = {};
             fLinks.forEach(l => {
@@ -848,7 +817,45 @@ onload = () => {
 
                 data.links.forEach(i => addLink(i, false));
                 data.highCardinality.forEach(i => addLink(i, true));
-                update(showTabs && tabFilters[0]?.filter);
+                update();
+
+                return d3.json(`${baseUrl}/neighbors/tabs`);
+            })
+            .then(tabs => {
+                if (!tabs['@graph'] || !tabs['@graph'].length) {
+                    return;
+                }
+                tabs = tabs['@graph'].map(tab => {
+                    const {fNodes, fLinks} = applyFilters(nodes, links, tab.hasFilter);
+                    return {
+                        ...tab,
+                        fNodes,
+                        fLinks,
+                    };
+                }).filter(tab => tab.fNodes.length && tab.fLinks.length);
+
+                tabs.unshift({ '@id': 0, label: 'All items' })
+
+                const tabItems = wrapper.insert('div', ':first-child')
+                    .attr('class', 'tabs')
+                    .selectAll('.tab')
+                    .data(tabs, d => d['@id'])
+                    .join(enter => enter.append('a')
+                        .attr('href', '#')
+                        .attr('class', 'tab')
+                        .classed('active', (d, i) => !i)
+                        .text(d => d.label)
+                    )
+                    .on('click', function(ev, d) {
+                        ev.preventDefault();
+                        const $this = d3.select(this);
+                        if ($this.classed('active')) {
+                            return;
+                        }
+                        tabItems.classed('active', false);
+                        $this.classed('active', true);
+                        update(d.fNodes || nodes, d.fLinks || links);
+                    });
             });
     });
 };

@@ -1,11 +1,12 @@
 import base64
+import json
 import logging
 import os
 import pickle
 import time
 import markdown
 import requests
-from SPARQLWrapper import SPARQLWrapper, JSON, BASIC
+from SPARQLWrapper import SPARQLWrapper, JSON, BASIC, JSONLD
 from flask import g
 from rdflib import Graph, SKOS, URIRef
 from xml.dom.minidom import Document as xml_Document
@@ -14,6 +15,7 @@ import re
 from bs4 import BeautifulSoup
 import vocprez._config as config
 from . import source
+from pyld import jsonld
 
 
 __all__ = [
@@ -24,6 +26,15 @@ __all__ = [
     "get_graph",
     "url_decode"
 ]
+
+TABS_FRAME = {
+    '@context': {
+        '@vocab': 'urn:ogc:neighbors/tabs#',
+        'label': 'http://www.w3.org/2000/01/rdf-schema#label',
+    },
+    '@type': 'Tab',
+    'hasFilter': {}
+}
 
 
 def cache_write(cache_object):
@@ -211,6 +222,36 @@ def sparql_query(
             )
         )
         return None
+
+
+def sparql_construct_query(q,
+        sparql_endpoint=config.SPARQL_ENDPOINT,
+        sparql_username=config.SPARQL_USERNAME,
+        sparql_password=config.SPARQL_PASSWORD):
+    sparql = SPARQLWrapper(sparql_endpoint)
+    sparql.setQuery(q)
+    sparql.setReturnFormat(JSONLD)
+
+    if sparql_username and sparql_password:
+        sparql.setHTTPAuth(BASIC)
+        sparql.setCredentials(sparql_username, sparql_password)
+
+    try:
+        return json.load(sparql.query().response)
+    except Exception as e:
+        import traceback
+        traceback.print_exception(e)
+        logging.debug("SPARQL query failed: {}".format(e))
+        logging.debug(
+            "endpoint={}\nsparql_username={}\nsparql_password={}\n{}".format(
+               q,  sparql_endpoint, sparql_username, sparql_password
+            )
+        )
+        return None
+
+
+def frame_neighbors_tabs(jsonlddoc):
+    return jsonld.frame(jsonlddoc, TABS_FRAME)
 
 
 def submit_sparql_query(

@@ -896,6 +896,22 @@ def neighbors_objects():
     }
 
 
+@app.route("/neighbors/tabs")
+def neighbors_tabs():
+    q = """
+        PREFIX tabs: <urn:ogc:neighbors/tabs#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        CONSTRUCT WHERE {
+          ?tab a tabs:Tab ;
+            rdfs:label ?label ;
+            tabs:hasFilter ?filter .
+          ?filter a ?filterType ;
+            ?filterP ?filterO .
+        }
+    """
+    return u.frame_neighbors_tabs(u.sparql_construct_query(q))
+
+
 # run the Flask app
 if __name__ == "__main__":
     app.run(debug=config.DEBUG, threaded=True, port=config.PORT)
