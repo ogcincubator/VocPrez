@@ -400,12 +400,6 @@ class Source:
                 s["wasDerivedFrom"] = val
             elif prop == "http://www.w3.org/2000/01/rdf-schema#subClassOf" and r["o"]["type"] == "bnode":
                 continue
-            elif prop in annotation_types.keys():
-                if property_label is None:
-                    property_label = annotation_types.get(prop)
-
-                if property_label is not None:
-                    annotations[prop] = (Property(prop, property_label, val, object_label))
 
             elif prop in related_instance_types.keys():
                 if property_label is None:
