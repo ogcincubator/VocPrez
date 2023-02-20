@@ -83,6 +83,7 @@ def cache_load():
         else:  # old cache file
             logging.debug("rebuild g & CACHE_FILE from collect() methods")
             cache_clear()
+            g.VOCABS = {}
 
             for source_details in config.DATA_SOURCES.values():
                 getattr(source, source_details["source"]).collect(source_details)
