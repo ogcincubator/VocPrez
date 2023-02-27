@@ -395,9 +395,12 @@ class Source:
                     property_label = related_instance_types.get(prop)
 
                 if property_label is not None:
-                    if not prop in related_instances:
+                    if prop not in related_instances:
                         related_instances[prop] = []
-                    related_instances[prop].append((Property(prop, property_label, val, object_label)))
+
+                    # Do not add duplicates
+                    if not any(ri.value == val for ri in related_instances[prop]):
+                        related_instances[prop].append((Property(prop, property_label, val, object_label)))
 
             else:  # other properties
                 if val != "http://www.w3.org/2004/02/skos/core#Concept" and prop not in suppressed_properties():
@@ -407,9 +410,10 @@ class Source:
                         preferred_html = val
                     if property_label is None:
                         property_label = prop
-                    if not prop in other_properties  :
+                    if prop not in other_properties:
                         other_properties[prop] = []
-                    other_properties[prop].append((Property(prop, property_label, val, object_label)))
+                    if not any(op.value == val for op in other_properties[prop]):
+                        other_properties[prop].append((Property(prop, property_label, val, object_label)))
 
 
         if not found:
