@@ -343,11 +343,6 @@ class Source:
         pl = None
         d = None
         c = None
-        s = {
-            "provenance": None,
-            "source": None,
-            "wasDerivedFrom": None,
-        }
 
         annotations = {}
         agent_types = {
@@ -392,12 +387,6 @@ class Source:
                 d = val
             elif prop == "http://www.w3.org/2000/01/rdf-schema#comment":
                 c = val
-            elif prop == "http://purl.org/dc/terms/provenance":
-                s["provenance"] = val
-            elif prop == "http://purl.org/dc/terms/source":
-                s["source"] = val
-            elif prop == "http://www.w3.org/ns/prov#wasDerivedFrom":
-                s["wasDerivedFrom"] = val
             elif prop == "http://www.w3.org/2000/01/rdf-schema#subClassOf" and r["o"]["type"] == "bnode":
                 continue
 
