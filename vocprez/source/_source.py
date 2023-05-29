@@ -383,7 +383,7 @@ class Source:
             else:
                 object_label = val
             object_def = None
-            if hasattr(config, 'CONCEPT_DESCRIPTION_TOOLTIP') and config.CONCEPT_DESCRIPTION_TOOLTIP:
+            if hasattr(config, 'CONCEPT_DEFINITION_TOOLTIP') and config.CONCEPT_DEFINITION_TOOLTIP:
                 object_def = r.get('odef', {}).get('value')
 
             found = True
