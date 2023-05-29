@@ -610,7 +610,7 @@ class Source:
         def build_hierarchy(bindings_list,  broader_concept=None, vocab_uri=vocab_uri , found = {} , level=0):
             """
             Recursive helper function to build hierarchy list from a bindings list
-            Returns list of tuples: (<level>, <concept>, <concept_preflabel>, <broader_concept>)
+            Returns list of tuples: (<level>, <concept>, <concept_preflabel>, <broader_concept>, <definition>)
             """
             level += 1  # Start with level 1 for top concepts
             hier = []
@@ -650,6 +650,7 @@ class Source:
                                          binding_dict["broader_concept"]["value"]
                                          if binding_dict.get("broader_concept")
                                          else None,
+                                         binding_dict.get("concept_definition", {}).get('value'),
                                      )
                                  ] + build_hierarchy(bindings_list, broader_concept=concept,vocab_uri=vocab_uri, found=found, level=level)
             return hier
@@ -660,7 +661,7 @@ class Source:
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             
-            SELECT distinct ?concept ?concept_preflabel ?broader_concept
+            SELECT distinct ?concept ?concept_preflabel ?broader_concept ?concept_definition
             WHERE {{
                     
                     {{ ?concept a skos:Concept .
@@ -676,6 +677,10 @@ class Source:
                     OPTIONAL {{ 
                         ?concept skos:broader ?broader_concept .
                         ?broader_concept skos:inScheme <{vocab_uri}> .
+                    }}
+                    OPTIONAL {{
+                        ?concept skos:definition ?concept_definition .
+                        FILTER(lang(?concept_definition) = "{language}" || lang(?concept_definition) = "")
                     }}
                     FILTER(lang(?concept_preflabel) = "{language}" || lang(?concept_preflabel) = "")
               

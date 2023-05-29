@@ -38,6 +38,7 @@ DEBUG = False
 SPARQL_ENDPOINT = "http://defs-dev.opengis.net:8080/rdf4j-server/repositories/profiles"
 SPARQL_USERNAME = ""
 SPARQL_PASSWORD = ""
+CONCEPT_DESCRIPTION_TOOLTIP = False
 
 
 SOURCE_NAME = "nvs"

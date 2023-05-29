@@ -1,4 +1,5 @@
 import base64
+import html
 import json
 import logging
 import os
@@ -130,12 +131,17 @@ def draw_concept_hierarchy(hierarchy):
             if mult is None:  # else: # everything is normal
                 mult = item[0] - 1
 
-            t = tab * mult + "* [" + item[2] + "](" + get_content_uri(item[1]) + ")\n"
+            if hasattr(config, "CONCEPT_DESCRIPTION_TOOLTIP") and config.CONCEPT_DESCRIPTION_TOOLTIP and len(item) > 4 and item[4]:
+                description = item[4][:200] + ('…' if len(item[4]) > 200 else '')
+                t = tab * mult + f'* [<span class="tooltip">{item[2]}<span class="tooltiptext">{description}</span></span>]({get_content_uri(item[1])})\n'
+            else:
+                t = tab * mult + "* [" + item[2] + "](" + get_content_uri(item[1]) + ")\n"
+
             text += t
             previous_length = mult
             tracked_items.append({"name": item[1], "indent": mult})
 
-        return markdown.markdown(text)
+        return markdown.markdown(text, extensions=['attr_list'])
 
 
 def render_concept_tree(html_doc):
