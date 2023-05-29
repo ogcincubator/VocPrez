@@ -75,12 +75,18 @@
           </th>
           {% set lastprop.lastprop = prop.uri %}
           <td>
+            {% if prop.tooltip %}
+               <span class="tooltip">
+            {% endif %}
             {% if prop.value.startswith('http') %}
               <a href="{{ utils.get_content_uri(prop.value) }}">{{ prop.value_label }}</a>
             {% else %}
               {{ prop.value }}
             {% endif %}
-
+            {% if prop.tooltip %}
+              <span class="tooltiptext">{{ prop.get_tooltip() }}</span>
+              </span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

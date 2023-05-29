@@ -337,6 +337,11 @@ class Source:
                         ?o skos:prefLabel|rdfs:label ?opl .
                         FILTER(!isLiteral(?opl) || lang(?opl) = "en" || lang(?opl) = "")
                     }
+                    
+                    OPTIONAL {
+                        ?o skos:definition ?odef .
+                        FILTER(!isLiteral(?odef) || lang(?odef) = "en" || lang(?odef) = "")
+                    }
             }
             """.replace("xxxx", uri)
 
@@ -377,6 +382,9 @@ class Source:
                 object_label = r["opl"]["value"]
             else:
                 object_label = val
+            object_def = None
+            if hasattr(config, 'CONCEPT_DESCRIPTION_TOOLTIP') and config.CONCEPT_DESCRIPTION_TOOLTIP:
+                object_def = r.get('odef', {}).get('value')
 
             found = True
             if val == "http://www.w3.org/2004/02/skos/core#Concept":
@@ -400,7 +408,7 @@ class Source:
 
                     # Do not add duplicates
                     if not any(ri.value == val for ri in related_instances[prop]):
-                        related_instances[prop].append((Property(prop, property_label, val, object_label)))
+                        related_instances[prop].append((Property(prop, property_label, val, object_label, object_def)))
 
             else:  # other properties
                 if val != "http://www.w3.org/2004/02/skos/core#Concept" and prop not in suppressed_properties():
