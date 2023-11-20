@@ -133,7 +133,8 @@ def draw_concept_hierarchy(hierarchy):
 
             if (hasattr(config, "CONCEPT_DEFINITION_TOOLTIP") and config.CONCEPT_DEFINITION_TOOLTIP
                     and len(item) > 4 and item[4]):
-                description = item[4][:200] + ('…' if len(item[4]) > 200 else '')
+                description = re.sub(r'\r?\n.*', '', item[4])
+                description = description[:200] + ('…' if len(description) > 200 else '')
                 t = tab * mult + f'* [<span class="tooltip">{item[2]}<span class="tooltiptext">{description}</span></span>]({get_content_uri(item[1])})\n'
             else:
                 t = tab * mult + "* [" + item[2] + "](" + get_content_uri(item[1]) + ")\n"
